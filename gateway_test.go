@@ -24,105 +24,159 @@ var (
 	clientMAC gateway.MAC
 )
 
+func PingCmd(target net.IPNet) string {
+	return "ping -c 1 -W 1 " + target.IP.String()
+}
+
+func ClearIPTables(ns gateway.NS, t *testing.T) {
+	gwRunner := gateway.NamespacedRunner(gw)
+	if err := gateway.Do(
+		gateway.RemoveChainCmdFunc(gwRunner, gateway.DOWNTIME_CHAIN),
+		gwRunner.LineFunc(gateway.FLUSH.ChainCmd("FORWARD")),
+		gwRunner.LineFunc(gateway.FLUSH.ChainCmd("OUTPUT")),
+		gwRunner.LineFunc(gateway.FLUSH.ChainCmd("INPUT")),
+	); err != nil {
+		fmt.Println(gwRunner)
+		_, iptables, _ := gateway.ExecLine(gw.WrapCmdLine("iptables -L -v"))
+		fmt.Println(iptables)
+		t.Fatal("failed to clear IPTables")
+	}
+}
+
 // first test if we can route
 func TestAllow(t *testing.T) {
-	if _, err := gateway.RunCmdLine(client.PingCmdLine(serverIP)); err != nil {
+	ClearIPTables(gw, t)
+	gwRunner := gateway.NamespacedRunner(gw)
+	clientRunner := gateway.NamespacedRunner(client)
+	if err := clientRunner.Line(PingCmd(serverIP)); err != nil {
+		fmt.Println(gwRunner)
+		fmt.Println(clientRunner)
+		_, iptables, _ := gateway.ExecLine(gw.WrapCmdLine("iptables -L -v"))
+		fmt.Println(iptables)
 		t.Fatal(err)
 	}
 }
 
 // test if we can block
 func TestRuleBlock(t *testing.T) {
-	if _, err := gateway.RunCmdLines(
-		client.WrapCmdLine("iptables -A FORWARD -s 192.168.100.20 -j DROP"),
-		client.PingCmdLine(serverIP),
+	ClearIPTables(gw, t)
+	gwRunner := gateway.NamespacedRunner(gw)
+	clientRunner := gateway.NamespacedRunner(client)
+	if err := gateway.Do(
+		gwRunner.LineFunc(gateway.APPEND.FilterRule("FORWARD", "-s 192.168.100.20", "DROP")),
+		clientRunner.LineFunc(PingCmd(serverIP)),
 	); err == nil {
+		fmt.Println(gwRunner)
+		fmt.Println(clientRunner)
+		_, iptables, _ := gateway.ExecLine(gw.WrapCmdLine("iptables -L -v"))
+		fmt.Println(iptables)
 		t.Fatal("did not block")
 	}
 }
 
 // test if we can block a set
 func TestBlockSet(t *testing.T) {
+	ClearIPTables(gw, t)
+	gwRunner := gateway.NamespacedRunner(gw)
+	clientRunner := gateway.NamespacedRunner(client)
 	ipSet := gateway.IPSet{Name: "test", Members: []gateway.MAC{clientMAC}}
-	cmds := gateway.Cmds{}
-	cmds.AddCmdLine(gw.WrapCmdLines(ipSet.CreateCmdLines())...)
-	cmds.AddCmdLine(gw.WrapCmdLine(ipSet.BlockInternetCmdLine()))
-	cmds.AddCmdLine(client.PingCmdLine(serverIP))
-	if outs, err := gateway.Run(cmds...); err == nil {
-		fmt.Println(gateway.Multiline(cmds.Debug(outs)))
-		t.Fatal("did not block")
+	if err := gateway.Do(
+		gwRunner.LineFunc(ipSet.SyncCmdLines()...),
+		gateway.EnsureChainFunc(gwRunner, gateway.DOWNTIME_CHAIN),
+		gwRunner.LineFunc(gateway.APPEND.FilterRule(
+			gateway.DOWNTIME_CHAIN, ipSet.Match(), gateway.DROP),
+		),
+		gateway.ExpectFailFunc("ping server", clientRunner.LineFunc(PingCmd(serverIP))),
+	); err != nil {
+		fmt.Println(gwRunner)
+		fmt.Println(clientRunner)
+		_, iptables, _ := gateway.ExecLine(gw.WrapCmdLine("iptables -L -v"))
+		fmt.Println(iptables)
+		t.Fatal("failed to block")
 	}
 }
 
 // test if we can allow a set
 func TestAllowSet(t *testing.T) {
+	ClearIPTables(gw, t)
+	gwRunner := gateway.NamespacedRunner(gw)
+	clientRunner := gateway.NamespacedRunner(client)
 	ipSet := gateway.IPSet{Name: "test", Members: []gateway.MAC{clientMAC}}
-	cmds := gateway.Cmds{}
-	cmds.AddCmdLine(gw.WrapCmdLines(ipSet.CreateCmdLines())...)
-	cmds.AddCmdLine(gw.WrapCmdLine("ipset list"))
-	cmds.AddCmdLine(gw.WrapCmdLine("ip addr"))
-	// FIX
-	//cmds.AddCmdLine(gw.WrapCmdLine(EnsureDowntimeChain()))
-	//	cmds.AddCmdLine(gw.WrapCmdLine(ipSet.ReturnInternetCmdLine()))
-	cmds.AddCmdLine(client.PingCmdLine(serverIP))
-	if outs, err := gateway.Run(cmds...); err != nil {
-		fmt.Println(gateway.Multiline(cmds.Debug(outs)))
+	if err := gateway.Do(
+		gwRunner.LineFunc(ipSet.SyncCmdLines()...),
+		gateway.EnsureChainFunc(gwRunner, gateway.DOWNTIME_CHAIN),
+		gwRunner.LineFunc(gateway.APPEND.FilterRule(
+			gateway.DOWNTIME_CHAIN, ipSet.Match(), gateway.RETURN),
+		),
+		clientRunner.LineFunc(PingCmd(serverIP)),
+	); err != nil {
+		fmt.Println(gwRunner)
+		fmt.Println(clientRunner)
+		_, iptables, _ := gateway.ExecLine(gw.WrapCmdLine("iptables -L -v"))
+		fmt.Println(iptables)
 		t.Fatal("blocked")
 	}
 }
 
 func TestMain(m *testing.M) {
 	// it is the internal client outbound that can get blocked for downtime
-	cmds := &gateway.Cmds{}
-
 	exitCode := func() int {
+		runner := &gateway.Runner{}
+		gwRunner := gateway.NamespacedRunner(gw)
+		clientRunner := gateway.NamespacedRunner(client)
+		serverRunner := gateway.NamespacedRunner(server)
+
+		// these are deferred to end of this inner function
 		for _, h := range []gateway.NS{server, client, gw} {
-			cmds.Add(h.DelCmd())
-			cmds.AddCmdLine("ip netns add " + string(h))
-			defer gateway.Run(h.DelCmd())
+			defer runner.Func(h.DelCmd())
 		}
 
-		// connect and configure wan interfaces in the 44.0.0.0/8 network
-		// the internal server normally has many routes but for this test
-		// just route to the test gateway for return traffic
-		cmds.AddCmdLine(gw.WrapCmdLine("ip link add wan type veth peer name wan-peer"))
-		cmds.AddCmdLine(gw.WrapCmdLine("ip link set wan-peer netns " + string(server)))
-		cmds.AddCmdLine(gw.WrapCmdLine("ip addr add " + gwWanIP.String() + " dev wan"))
-		cmds.AddCmdLine(gw.WrapCmdLine("ip link set dev wan up"))
+		// every one of these functions can error, use Do to execute, stopping if any fails
+		if err := gateway.Do(
+			runner.Func(server.DelCmd()),
+			runner.Func(client.DelCmd()),
+			runner.Func(gw.DelCmd()),
+			runner.LineFunc(server.CreateCmd()),
+			runner.LineFunc(client.CreateCmd()),
+			runner.LineFunc(gw.CreateCmd()),
 
-		cmds.AddCmdLine(server.WrapCmdLine("ip addr add " + serverIP.String() + " dev wan-peer"))
-		cmds.AddCmdLine(server.WrapCmdLine("ip link set dev wan-peer up"))
-		cmds.AddCmdLine(server.WrapCmdLine("ip route add default via " + gwWanIP.IP.String() + " dev wan-peer"))
+			// connect and configure wan interfaces in the 44.0.0.0/8 network
+			// the internal server normally has many routes but for this test
+			// just route to the test gateway for return traffic
+			gwRunner.LineFunc("ip link add wan type veth peer name wan-peer"),
+			gwRunner.LineFunc("ip link set wan-peer netns "+string(server)),
+			gwRunner.LineFunc("ip addr add "+gwWanIP.String()+" dev wan"),
+			gwRunner.LineFunc("ip link set dev wan up"),
 
-		cmds.AddCmdLine(server.WrapCmdLine("ip addr"))
+			serverRunner.LineFunc("ip addr add "+serverIP.String()+" dev wan-peer"),
+			serverRunner.LineFunc("ip link set dev wan-peer up"),
+			serverRunner.LineFunc("ip route add default via "+gwWanIP.IP.String()+" dev wan-peer"),
 
-		// connect and configure lan interfaces on the 192.168.100/24 network
-		// internal client routes through gatway at 192.168.100.1
-		cmds.AddCmdLine(gw.WrapCmdLine("ip link add lan type veth peer name lan-peer"))
-		cmds.AddCmdLine(gw.WrapCmdLine("ip link set lan-peer netns " + string(client)))
-		cmds.AddCmdLine(gw.WrapCmdLine("ip addr add 192.168.100.1/24 dev lan"))
-		cmds.AddCmdLine(gw.WrapCmdLine("ip link set dev lan up"))
+			serverRunner.LineFunc("ip addr"),
 
-		cmds.AddCmdLine(client.WrapCmdLine("ip addr add 192.168.100.20/24 dev lan-peer"))
-		cmds.AddCmdLine(client.WrapCmdLine("ip link set dev lan-peer up"))
-		cmds.AddCmdLine(client.WrapCmdLine("ip route add default via 192.168.100.1 dev lan-peer"))
+			// connect and configure lan interfaces on the 192.168.100/24 network
+			// internal client routes through gatway at 192.168.100.1
+			gwRunner.LineFunc("ip link add lan type veth peer name lan-peer"),
+			gwRunner.LineFunc("ip link set lan-peer netns "+string(client)),
+			gwRunner.LineFunc("ip addr add 192.168.100.1/24 dev lan"),
+			gwRunner.LineFunc("ip link set dev lan up"),
 
-		clientAddrsIdx := cmds.Add(client.WrapCmd(gateway.NetInterface("lan-peer").IPAddrJsonCmd()))[0]
+			clientRunner.LineFunc("ip addr add 192.168.100.20/24 dev lan-peer"),
+			clientRunner.LineFunc("ip link set dev lan-peer up"),
+			clientRunner.LineFunc("ip route add default via 192.168.100.1 dev lan-peer"),
 
-		outs, err := gateway.Run(*cmds...)
-		if err != nil {
+			clientRunner.Func(gateway.NetInterface("lan-peer").IPAddrJsonCmd()),
+
+			gateway.AssignFunc(clientRunner.LastOutFunc(), &clientMAC, gateway.Pipe(gateway.Pipe(
+				gateway.IPAddrsOutFromString,
+				gateway.MACAddrFunc("lan-peer")),
+				gateway.MACFromString,
+			)),
+		); err != nil {
+			fmt.Println(runner)
+			fmt.Println(gwRunner)
+			fmt.Println(clientRunner)
 			fmt.Println(err)
-			fmt.Println(gateway.Multiline(cmds.Debug(outs)))
-			return 1
-		}
-
-		clientMAC, err = gateway.Pipe(gateway.Pipe(
-			gateway.IPAddrsOutFromString,
-			gateway.MACAddrFunc("lan-peer")),
-			gateway.MACFromString,
-		)(outs[clientAddrsIdx])
-		if err != nil {
-			fmt.Println("Failed to get MAC address from interfaces: %w", err)
 			return 1
 		}
 

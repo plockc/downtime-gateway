@@ -1,9 +1,5 @@
 package gateway
 
-import (
-	"net"
-)
-
 type NS string
 
 func (ns NS) WrapCmd(cmd []string) []string {
@@ -26,6 +22,6 @@ func (ns NS) DelCmd() []string {
 	return []string{"sh", "-c", `if ` + nsExists + `; then ` + delCmd + `; fi`}
 }
 
-func (ns NS) PingCmdLine(target net.IPNet) string {
-	return ns.WrapCmdLine("ping -c 1 -W 1 " + target.IP.String())
+func (ns NS) CreateCmd() string {
+	return "ip netns add " + string(ns)
 }

@@ -13,7 +13,7 @@ func (ipSet IPSet) DestroyCmdLine() string {
 	return "ipset destroy -exist " + ipSet.Name
 }
 
-func (ipSet IPSet) CreateCmdLines() []string {
+func (ipSet IPSet) SyncCmdLines() []string {
 	name := ipSet.Name
 	cmdlines := []string{
 		"ipset destroy -exist " + name + "-builder",
@@ -32,14 +32,6 @@ func (ipSet IPSet) CreateCmdLines() []string {
 	return cmdlines
 }
 
-func (ipSet IPSet) BlockInternetCmdLine() string {
-	return ("iptables -A FORWARD" +
-		" -m set --match-set " + ipSet.String() + " src" +
-		" -j DROP")
-}
-
-func (ipSet IPSet) ReturnInternetCmdLine() string {
-	return ("iptables -A FORWARD" +
-		" -m set --match-set " + ipSet.String() + " src" +
-		" -j RETURN")
+func (ipSet IPSet) Match() string {
+	return "-m set --match-set " + ipSet.String() + " src"
 }

@@ -3,67 +3,111 @@ package gateway
 import (
 	"fmt"
 	"os/exec"
+	"strconv"
 	"strings"
 )
 
-type Cmds [][]string
-
-func (cmds *Cmds) AddCmdLine(cmd ...string) []int {
-	return cmds.Add(Multiline(cmd).Split()...)
+func ExecLine(cmd string) (int, string, error) {
+	return Exec(strings.Split(cmd, " "))
 }
 
-func (cmds *Cmds) Add(cmd ...[]string) []int {
-	offset := len(*cmds)
-	idxs := []int{}
-	for _, c := range cmd {
-		*cmds = append(*cmds, c)
-		idxs = append(idxs, offset)
-		offset++
+func Exec(cmd []string) (int, string, error) {
+	c := exec.Command(cmd[0], cmd[1:]...)
+	//fmt.Println("$ " + c.String())
+	out, err := c.CombinedOutput()
+	outString := ""
+	if out != nil {
+		outString = string(out)
 	}
-	return idxs
+	switch t := err.(type) {
+	case *exec.ExitError:
+		return t.ExitCode(), outString, fmt.Errorf(
+			"`%s` failed with exit code %d: %s",
+			c.String(), t.ExitCode(), string(t.Stderr),
+		)
+	case error:
+		return 1, outString, fmt.Errorf(
+			"failed to run `%s`: %w", c.String(), err,
+		)
+	}
+	return 0, outString, nil
 }
 
-func RunCmdLine(cmd string) (string, error) {
-	outs, err := Run(strings.Split(cmd, " "))
-	return outs[0], err
+type Result struct {
+	Cmd  []string
+	Out  string
+	Code int
 }
 
-func RunCmdLines(cmds ...string) ([]string, error) {
-	return Run(Multiline(cmds).Split()...)
+func (d Result) String() string {
+	if d.Code != 0 {
+		return "[" + strconv.Itoa(d.Code) + "] " + strings.Join(d.Cmd, " ") + "\n" + d.Out
+	}
+	return strings.Join(d.Cmd, " ") + "\n" + d.Out
 }
 
-func Run(cmds ...[]string) ([]string, error) {
-	outs := []string{}
+type Runner struct {
+	NS
+	Results []Result
+}
+
+func NamespacedRunner(ns NS) *Runner {
+	return &Runner{NS: ns}
+}
+
+func (r Runner) Last() Result {
+	return r.Results[len(r.Results)-1]
+}
+
+// LastFund is basically defers getting the result, useful when the last command is inside a Do(...)
+// needs a pointer as otherwise the array state (likely empty) when calling LastOutFunc is copied
+// instead of using the updated Results array pointer maintained by runner
+func (r *Runner) LastOutFunc() func() string {
+	return func() string {
+		return r.Results[len(r.Results)-1].Out
+	}
+}
+
+func (r Runner) String() string {
+	out := []string{}
+	for _, d := range r.Results {
+		out = append(out, d.String())
+	}
+	return strings.Join(out, "\n")
+}
+
+func (r *Runner) Line(cmds ...string) error {
+	return r.Run(Multiline(cmds).Split()...)
+}
+
+func (r *Runner) Run(cmds ...[]string) error {
 	for _, cmd := range cmds {
-		c := exec.Command(cmd[0], cmd[1:]...)
-		out, err := c.CombinedOutput()
-		outs = append(outs, string(out))
-		switch t := err.(type) {
-		case *exec.ExitError:
-			return outs, fmt.Errorf(
-				"`%s` failed with exit code %d: %s",
-				c.String(), t.ExitCode(), string(t.Stderr),
-			)
-		case error:
-			return outs, fmt.Errorf(
-				"failed to run `%s`: %w", c.String(), err,
-			)
+		// namspace the command if we're in a namespace
+		if r.NS != "" {
+			cmd = r.NS.WrapCmd(cmd)
+		}
+		code, out, err := Exec(cmd)
+		r.Results = append(r.Results, Result{Cmd: cmd, Out: out, Code: code})
+		if err != nil {
+			return err
 		}
 	}
 
-	return outs, nil
+	return nil
 }
 
-func (cmds Cmds) CmdLines() []string {
-	return FromJoin(cmds)
-}
-
-// can be used with Multiline to Print out
-func (cmds Cmds) Debug(outs []string) []string {
-	cmdlines := []string{}
-	for i, out := range outs {
-		cmdline := cmds[i]
-		cmdlines = append(cmdlines, strings.Join(cmdline, " "), out)
+// will appends the outputs of cmds to the Runer
+// appending so can debug the full chain of commands when used multiple times in Do(...)
+func (r *Runner) LineFunc(cmds ...string) func() error {
+	return func() error {
+		return r.Run(Multiline(cmds).Split()...)
 	}
-	return cmdlines
+}
+
+// will appends the outputs of cmds to the Runer
+// appending so can debug the full chain of commands when used multiple times in Do(...)
+func (r *Runner) Func(cmds ...[]string) func() error {
+	return func() error {
+		return r.Run(cmds...)
+	}
 }
