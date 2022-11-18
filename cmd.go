@@ -11,14 +11,18 @@ func ExecLine(cmd string) (int, string, error) {
 	return Exec(strings.Split(cmd, " "))
 }
 
+// Exec will trim the trailing new line
+// TODO: add variadic option parameter to keep trailing newline
 func Exec(cmd []string) (int, string, error) {
 	c := exec.Command(cmd[0], cmd[1:]...)
-	//fmt.Println("$ " + c.String())
 	out, err := c.CombinedOutput()
 	outString := ""
 	if out != nil {
 		outString = string(out)
 	}
+	outString = strings.TrimRightFunc(outString, func(r rune) bool {
+		return r == '\n'
+	})
 	switch t := err.(type) {
 	case *exec.ExitError:
 		return t.ExitCode(), outString, fmt.Errorf(
@@ -57,6 +61,10 @@ func NamespacedRunner(ns NS) *Runner {
 
 func (r Runner) Last() Result {
 	return r.Results[len(r.Results)-1]
+}
+
+func (r Runner) LastOut() string {
+	return r.Results[len(r.Results)-1].Out
 }
 
 // LastFund is basically defers getting the result, useful when the last command is inside a Do(...)

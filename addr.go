@@ -24,6 +24,10 @@ func MACFromString(mac string) (MAC, error) {
 	return MAC{bs[0], bs[1], bs[2], bs[3], bs[4], bs[5]}, nil
 }
 
+func (mac MAC) MarshalJSON() ([]byte, error) {
+	return []byte(`"` + mac.String() + `"`), nil
+}
+
 type IPAddrsOut []IPAddrOut
 
 type IPAddrOut struct {
