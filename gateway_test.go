@@ -39,7 +39,16 @@ func ClearIPTables(ns gateway.NS, t *testing.T) {
 		fmt.Println(gwRunner)
 		_, iptables, _ := gateway.ExecLine(gw.WrapCmdLine("iptables -L -v"))
 		fmt.Println(iptables)
-		t.Fatal("failed to clear IPTables")
+		t.Fatalf("failed to clear IPTables: %v", err)
+	}
+}
+
+func ClearIPSets(ns gateway.NS, t *testing.T, set ...string) {
+	gwRunner := gateway.NamespacedRunner(gw)
+	for _, s := range set {
+		if err := gwRunner.Line("ipset destroy -exist " + s); err != nil {
+			t.Fatalf("failed to clear ipsets: %v", err)
+		}
 	}
 }
 
