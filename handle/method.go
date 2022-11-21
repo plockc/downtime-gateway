@@ -30,7 +30,7 @@ func (mhs MethodHandlers) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	methodHandler, ok := mhs[r.Method]
 	if !ok {
 		errorResponse(w, r.URL.Path, http.StatusMethodNotAllowed, fmt.Errorf(
-			"Method '%s' is not allowed, allowed: %v", r.Method, maps.Keys(mhs),
+			"method '%v' is not allowed, allowed: %v", r.Method, maps.Keys(mhs),
 		))
 		return
 	}

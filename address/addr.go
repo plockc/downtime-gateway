@@ -1,4 +1,4 @@
-package gateway
+package address
 
 import (
 	"encoding/hex"
@@ -6,6 +6,12 @@ import (
 	"fmt"
 	"strings"
 )
+
+type NetInterface string
+
+func (ni NetInterface) IPAddrJsonCmd() []string {
+	return strings.Split("ip -j -p addr show dev "+string(ni), " ")
+}
 
 type MAC [6]uint8
 

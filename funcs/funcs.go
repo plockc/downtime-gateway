@@ -1,4 +1,6 @@
-package gateway
+package funcs
+
+import "fmt"
 
 // Keep returns a new slice of items that return true for filter
 func Keep[S ~[]T, T any](items S, keepFunc func(t T) bool) []T {
@@ -31,4 +33,32 @@ func MapErrable[I, O any](items []I, mapFunc func(i I) (O, error)) ([]O, error) 
 		}
 	}
 	return mapped, nil
+}
+
+func Do(fs ...func() error) error {
+	for _, f := range fs {
+		if err := f(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func ExpectFailFunc(msg string, f func() error) func() error {
+	return func() error {
+		if err := f(); err == nil {
+			return fmt.Errorf("expected failure for: %s", msg)
+		}
+		return nil
+	}
+}
+
+// AssignFunc will take a func returning a value and error such that it
+// only returns an error and the value is assigned to a pointer
+func AssignFunc[T any](f func() (T, error), target *T) func() error {
+	return func() error {
+		var err error
+		*target, err = f()
+		return err
+	}
 }

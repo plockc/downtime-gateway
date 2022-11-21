@@ -4,25 +4,26 @@ import (
 	"fmt"
 	"net/http"
 	"reflect"
-	"strings"
 
-	"github.com/plockc/gateway"
+	"github.com/plockc/gateway/address"
+	"github.com/plockc/gateway/iptables"
+	"github.com/plockc/gateway/resource"
 	"golang.org/x/exp/slices"
 )
 
 var SetsHandlers = MethodHandlers{
 	http.MethodGet: TypedHandler{
 		Handler: setGet,
-		T:       reflect.TypeOf(gateway.IPSet{}),
+		T:       reflect.TypeOf(iptables.IPSet{}),
 	},
 	http.MethodPut: TypedHandler{
 		Handler: setPut,
-		T:       reflect.TypeOf(gateway.IPSet{}),
+		T:       reflect.TypeOf(iptables.IPSet{}),
 	},
 	//http.MethodPatch:  setPatch,
 	http.MethodDelete: TypedHandler{
 		Handler: setDelete,
-		T:       reflect.TypeOf(gateway.IPSet{}),
+		T:       reflect.TypeOf(iptables.IPSet{}),
 	},
 }
 
@@ -33,10 +34,15 @@ func setDelete(parts []string, _ any) (int, any, error) {
 	if len(parts) > 3 {
 		return 400, nil, fmt.Errorf("can only delete sets or member of sets")
 	}
+	ipSet := iptables.NewIPSet(parts[0], NS)
+	ipSetLC := resource.Lifecycle[string]{Resource: ipSet}
 	if len(parts) == 1 {
-		err := Runner.Line("ipset destroy -exist " + parts[0])
+		deleted, err := ipSetLC.EnsureDeleted()
 		if err != nil {
-			return 500, nil, fmt.Errorf("%w %s", err, Runner.LastOut())
+			return 500, nil, fmt.Errorf("%w %s", err, ipSet.Runner.LastOut())
+		}
+		if deleted {
+			return 204, nil, nil
 		}
 		return 200, nil, nil
 	}
@@ -44,37 +50,44 @@ func setDelete(parts []string, _ any) (int, any, error) {
 		return 400, nil, fmt.Errorf("can only delete 'members' from sets")
 	}
 
-	ipSet := gateway.IPSet{Name: parts[0]}
-	err := ipSet.Load(Runner)
+	macs, err := (&iptables.Member{IPSet: ipSet}).List()
 	if err != nil {
 		return 500, nil, err
 	}
-	if len(ipSet.Members) == 0 {
+	if len(macs) == 0 {
 		return 200, nil, nil
 	}
 
 	if len(parts) == 2 || parts[2] == "" {
-		err := Runner.Line("ipset flush " + parts[0])
+		err := ipSet.Clear()
 		if err != nil {
-			return 500, nil, fmt.Errorf("%w %s", err, Runner.LastOut())
+			return 500, nil, fmt.Errorf("%w %s", err, ipSet.Runner.LastOut())
 		}
 		return 204, nil, nil
 	}
 
-	mac, err := gateway.MACFromString(parts[2])
+	mac, err := address.MACFromString(parts[2])
 	if err != nil {
 		return 400, nil, fmt.Errorf("could not convert '" + parts[2] + " into a MAC")
 	}
 
-	if !slices.Contains(ipSet.Members, mac) {
+	if !slices.Contains(macs, mac) {
 		return 200, nil, nil
 	}
 
-	err = Runner.Line("ipset del " + parts[0] + " " + parts[2])
-	if err != nil {
-		return 500, nil, fmt.Errorf("%w %s", err, Runner.LastOut())
+	member := iptables.NewMember(ipSet, mac)
+	memberLifecycle := resource.Lifecycle[address.MAC]{
+		Resource: member,
 	}
-	return 204, nil, nil
+
+	deleted, err := memberLifecycle.EnsureDeleted()
+	if err != nil {
+		return 500, nil, fmt.Errorf("%w %s", err, member.IPSet.Runner.LastOut())
+	}
+	if deleted {
+		return 204, nil, nil
+	}
+	return 200, nil, nil
 }
 
 func setPut(parts []string, data any) (int, any, error) {
@@ -93,62 +106,36 @@ func setPut(parts []string, data any) (int, any, error) {
 		return 400, nil, fmt.Errorf("URL path too long")
 	}
 
-	setName := parts[0]
-	setExisted, err := ipSetExists(setName)
-	if err != nil {
-		return 500, nil, fmt.Errorf("%w %s", err, Runner.LastOut())
-	}
-
-	successfulReturnCode := 200
-	if !setExisted {
-		successfulReturnCode = 201
-	}
-
+	ipSet := iptables.NewIPSet(parts[0], NS)
+	ipSetLifecycle := resource.Lifecycle[string]{Resource: ipSet}
 	if len(parts) == 1 {
-		// PUT the IP Set then return
-		err := Runner.Line("ipset -N -exist " + setName + " hash:mac")
+		// Only creating the IPSet
+		created, err := ipSetLifecycle.Ensure()
 		if err != nil {
-			return 500, nil, fmt.Errorf("%w %s", err, Runner.LastOut())
+			return 500, nil, fmt.Errorf("%w %s", err, ipSet.Runner.LastOut())
 		}
-		return successfulReturnCode, nil, nil
-	}
-
-	// will be PUTing a member
-	ipSet := gateway.IPSet{Name: setName}
-	if err := ipSet.Load(Runner); err != nil {
-		return 500, nil, err
-	}
-
-	mac, err := gateway.MACFromString(parts[2])
-	if err != nil {
-		return 500, nil, err
-	}
-
-	if slices.Contains(ipSet.Members, mac) {
+		if created {
+			return 201, nil, nil
+		}
 		return 200, nil, nil
 	}
 
-	err = Runner.Line("ipset add " + setName + " " + parts[2])
+	// will be PUTing a member
+	mac, err := address.MACFromString(parts[2])
 	if err != nil {
-		return 500, nil, fmt.Errorf("%w %s", err, Runner.LastOut())
+		return 500, nil, err
 	}
-	return 201, nil, nil
-}
 
-func ipSets() ([]string, error) {
-	err := Runner.Line("ipset list -n")
+	member := iptables.NewMember(ipSet, mac)
+	memberLC := resource.Lifecycle[address.MAC]{Resource: member}
+	created, err := memberLC.Ensure()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list ipsets: %w", err)
+		return 500, nil, fmt.Errorf("%w %s", err, ipSet.Runner.LastOut())
 	}
-	return strings.Split(Runner.LastOut(), "\n"), nil
-}
-
-func ipSetExists(name string) (bool, error) {
-	sets, err := ipSets()
-	if err != nil {
-		return false, err
+	if created {
+		return 201, nil, nil
 	}
-	return slices.Contains(sets, name), nil
+	return 200, nil, nil
 }
 
 func setGet(parts []string, _ any) (int, any, error) {
@@ -156,7 +143,7 @@ func setGet(parts []string, _ any) (int, any, error) {
 		return 400, nil, fmt.Errorf("too many path elements in URL")
 	}
 
-	sets, err := ipSets()
+	sets, err := iptables.NewIPSet(parts[0], NS).List()
 	if err != nil {
 		return 500, nil, fmt.Errorf("failed to list ipsets: %w", err)
 	}
@@ -167,6 +154,7 @@ func setGet(parts []string, _ any) (int, any, error) {
 	}
 
 	setName := parts[0]
+	ipSet := iptables.NewIPSet(setName, NS)
 
 	if len(parts) >= 2 && parts[1] != "members" {
 		return 400, nil, fmt.Errorf("can only get 'members' from sets")
@@ -175,14 +163,20 @@ func setGet(parts []string, _ any) (int, any, error) {
 	// handle getting a single member (an exists test, either 200 or 404)
 	// /sets/foo/members/12:12:12:12:12:12
 	if len(parts) == 3 {
-		err := Runner.Line("ipset test " + setName + " " + parts[2])
-		if err == nil {
-			return 200, nil, nil
+		mac, err := address.MACFromString(parts[2])
+		if err != nil {
+			return 500, nil, err
 		}
-		if strings.Contains(Runner.Last().Out, "NOT in set") {
+		member := iptables.NewMember(ipSet, mac)
+		memberLC := resource.Lifecycle[address.MAC]{Resource: member}
+		exists, err := memberLC.Exists()
+		if err != nil {
+			return 500, nil, err
+		}
+		if !exists {
 			return 404, nil, fmt.Errorf("missing " + parts[2])
 		}
-		return 500, nil, fmt.Errorf("%w %s", err, Runner.LastOut())
+		return 200, nil, nil
 	}
 
 	// handle Listing the members of a given set
@@ -191,11 +185,10 @@ func setGet(parts []string, _ any) (int, any, error) {
 		return 404, nil, fmt.Errorf("missing set " + setName)
 	}
 
-	ipSet := gateway.IPSet{Name: setName}
-	err = ipSet.Load(Runner)
+	members, err := iptables.NewMember(ipSet, address.MAC{}).List()
 	if err != nil {
 		return 500, nil, err
 	}
 
-	return 200, ipSet.Members, nil
+	return 200, members, nil
 }

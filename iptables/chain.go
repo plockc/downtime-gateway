@@ -1,40 +1,23 @@
-package gateway
+package iptables
 
 import (
 	"strings"
 
+	"github.com/plockc/gateway/runner"
 	"golang.org/x/exp/slices"
 )
 
-type IPRuleCmd string
-type IPChainCmd string
+type ChainCmd string
 
 const (
-	DROP   = "DROP"
-	RETURN = "RETURN"
-
-	APPEND IPRuleCmd = "-A"
-	CHECK  IPRuleCmd = "-C"
-	DELETE IPRuleCmd = "-D"
-
-	LIST         IPChainCmd = "-L"
-	FLUSH        IPChainCmd = "-F"
-	NEW          IPChainCmd = "-N"
-	DELETE_CHAIN IPChainCmd = "-X"
+	LIST         ChainCmd = "-L"
+	FLUSH        ChainCmd = "-F"
+	NEW          ChainCmd = "-N"
+	DELETE_CHAIN ChainCmd = "-X"
 )
 
-func (iptc IPRuleCmd) FilterRule(chain, match, target string) string {
-	return "iptables " + string(iptc) + " " + chain + " " + match + " -j " + target
-}
-
-func EnsureIPRuleFunc(runner Runner, chain, match, target string) func() error {
-	return func() error {
-		err := runner.Line(CHECK.FilterRule(chain, match, target))
-		if err != nil {
-			return err
-		}
-		return runner.Line(APPEND.FilterRule(chain, match, target))
-	}
+func (ipcc ChainCmd) ChainCmd(name string) string {
+	return "iptables " + string(ipcc) + " " + name
 }
 
 func ListFilterChainsCmd() []string {
@@ -44,11 +27,7 @@ func ListFilterChainsCmd() []string {
 	}
 }
 
-func (ipcc IPChainCmd) ChainCmd(name string) string {
-	return "iptables " + string(ipcc) + " " + name
-}
-
-func EnsureChainFunc(runner *Runner, chain string) func() error {
+func EnsureChainFunc(runner *runner.Runner, chain string) func() error {
 	return func() error {
 		if err := runner.Run(ListFilterChainsCmd()); err != nil {
 			return err
@@ -70,7 +49,7 @@ func EnsureChainFunc(runner *Runner, chain string) func() error {
 	}
 }
 
-func RemoveChainCmdFunc(runner *Runner, chain string) func() error {
+func RemoveChainCmdFunc(runner *runner.Runner, chain string) func() error {
 	return func() error {
 		if err := runner.Run(ListFilterChainsCmd()); err != nil {
 			return err

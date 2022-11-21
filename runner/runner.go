@@ -1,40 +1,17 @@
-package gateway
+package runner
 
 import (
-	"fmt"
-	"os/exec"
 	"strconv"
 	"strings"
+
+	"github.com/plockc/gateway/exec"
+	"github.com/plockc/gateway/multiline"
+	"github.com/plockc/gateway/namespace"
 )
 
-func ExecLine(cmd string) (int, string, error) {
-	return Exec(strings.Split(cmd, " "))
-}
-
-// Exec will trim the trailing new line
-// TODO: add variadic option parameter to keep trailing newline
-func Exec(cmd []string) (int, string, error) {
-	c := exec.Command(cmd[0], cmd[1:]...)
-	out, err := c.CombinedOutput()
-	outString := ""
-	if out != nil {
-		outString = string(out)
-	}
-	outString = strings.TrimRightFunc(outString, func(r rune) bool {
-		return r == '\n'
-	})
-	switch t := err.(type) {
-	case *exec.ExitError:
-		return t.ExitCode(), outString, fmt.Errorf(
-			"`%s` failed with exit code %d: %s",
-			c.String(), t.ExitCode(), string(t.Stderr),
-		)
-	case error:
-		return 1, outString, fmt.Errorf(
-			"failed to run `%s`: %w", c.String(), err,
-		)
-	}
-	return 0, outString, nil
+type Runner struct {
+	namespace.NS
+	Results []Result
 }
 
 type Result struct {
@@ -50,21 +27,42 @@ func (d Result) String() string {
 	return strings.Join(d.Cmd, " ") + "\n" + d.Out
 }
 
-type Runner struct {
-	NS
-	Results []Result
-}
-
-func NamespacedRunner(ns NS) *Runner {
+func NamespacedRunner(ns namespace.NS) *Runner {
 	return &Runner{NS: ns}
 }
 
-func (r Runner) Last() Result {
+func (r *Runner) WrapCmd(cmd []string) []string {
+	if r == nil || r.NS == "" {
+		return cmd
+	}
+	return append(
+		[]string{"ip", "netns", "exec", string(r.NS)}, cmd...,
+	)
+}
+
+func (r *Runner) WrapCmdLine(cmd string) string {
+	if r == nil || r.NS == "" {
+		return cmd
+	}
+	return "ip netns exec " + string(r.NS) + " " + cmd
+}
+
+func (r *Runner) WrapCmdLines(cmds []string) []string {
+	return multiline.Multiline(cmds).Map(r.WrapCmdLine)
+}
+
+func (r *Runner) Last() Result {
+	if r == nil {
+		return Result{
+			Code: 1,
+			Out:  "internal error, result tracking not initialized",
+		}
+	}
 	return r.Results[len(r.Results)-1]
 }
 
-func (r Runner) LastOut() string {
-	return r.Results[len(r.Results)-1].Out
+func (r *Runner) LastOut() string {
+	return r.Last().Out
 }
 
 // LastFund is basically defers getting the result, useful when the last command is inside a Do(...)
@@ -72,11 +70,11 @@ func (r Runner) LastOut() string {
 // instead of using the updated Results array pointer maintained by runner
 func (r *Runner) LastOutFunc() func() string {
 	return func() string {
-		return r.Results[len(r.Results)-1].Out
+		return r.Last().Out
 	}
 }
 
-func (r Runner) String() string {
+func (r *Runner) String() string {
 	out := []string{}
 	for _, d := range r.Results {
 		out = append(out, d.String())
@@ -85,16 +83,16 @@ func (r Runner) String() string {
 }
 
 func (r *Runner) Line(cmds ...string) error {
-	return r.Run(Multiline(cmds).Split()...)
+	return r.Run(multiline.Multiline(cmds).Split()...)
 }
 
 func (r *Runner) Run(cmds ...[]string) error {
 	for _, cmd := range cmds {
 		// namspace the command if we're in a namespace
 		if r.NS != "" {
-			cmd = r.NS.WrapCmd(cmd)
+			cmd = r.WrapCmd(cmd)
 		}
-		code, out, err := Exec(cmd)
+		code, out, err := exec.Exec(cmd)
 		r.Results = append(r.Results, Result{Cmd: cmd, Out: out, Code: code})
 		if err != nil {
 			return err
@@ -108,7 +106,7 @@ func (r *Runner) Run(cmds ...[]string) error {
 // appending so can debug the full chain of commands when used multiple times in Do(...)
 func (r *Runner) LineFunc(cmds ...string) func() error {
 	return func() error {
-		return r.Run(Multiline(cmds).Split()...)
+		return r.Run(multiline.Multiline(cmds).Split()...)
 	}
 }
 

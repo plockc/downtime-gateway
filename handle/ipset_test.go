@@ -5,12 +5,14 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/plockc/gateway"
+	"github.com/plockc/gateway/address"
 	"github.com/plockc/gateway/handle"
+	"github.com/plockc/gateway/namespace"
+	"github.com/plockc/gateway/runner"
 )
 
-func ClearIPSets(ns gateway.NS, t *testing.T, set ...string) {
-	gwRunner := gateway.NamespacedRunner(gw)
+func ClearIPSets(ns namespace.NS, t *testing.T, set ...string) {
+	gwRunner := runner.NamespacedRunner(testNS)
 	for _, s := range set {
 		if err := gwRunner.Line("ipset destroy -exist " + s); err != nil {
 			t.Fatalf("failed to clear ipsets: %v: %s", err, gwRunner.LastOut())
@@ -19,7 +21,7 @@ func ClearIPSets(ns gateway.NS, t *testing.T, set ...string) {
 }
 
 func TestIPSetHandlers(t *testing.T) {
-	ClearIPSets(gw, t, "test")
+	ClearIPSets(testNS, t, "test")
 	getter := handle.SetsHandlers[http.MethodGet]
 	putter := handle.SetsHandlers[http.MethodPut]
 	deleter := handle.SetsHandlers[http.MethodDelete]
@@ -46,7 +48,7 @@ func TestIPSetHandlers(t *testing.T) {
 
 	t.Run("check members of empty set", func(t *testing.T) {
 		data := AssertHandler(t, getter, []string{"test", "members"}, nil, 200)
-		if len(data.([]gateway.MAC)) != 0 {
+		if len(data.([]address.MAC)) != 0 {
 			t.Fatalf("MACs returned: %v", data)
 		}
 	})
@@ -83,13 +85,13 @@ func TestIPSetHandlers(t *testing.T) {
 		}
 	})
 
-	mac, _ := gateway.MACFromString("12:12:12:12:12:12")
-	mac2, _ := gateway.MACFromString("12:12:12:12:12:34")
+	mac, _ := address.MACFromString("12:12:12:12:12:12")
+	mac2, _ := address.MACFromString("12:12:12:12:12:34")
 
 	t.Run("get members", func(t *testing.T) {
 		data := AssertHandler(
 			t, getter, []string{"test", "members"}, nil, 200)
-		if !reflect.DeepEqual(data.([]gateway.MAC), []gateway.MAC{mac, mac2}) {
+		if !reflect.DeepEqual(data.([]address.MAC), []address.MAC{mac, mac2}) {
 			t.Fatalf("did not get expected MACs: %v", data)
 		}
 	})
@@ -115,7 +117,7 @@ func TestIPSetHandlers(t *testing.T) {
 	t.Run("get remaining member", func(t *testing.T) {
 		data := AssertHandler(
 			t, getter, []string{"test", "members"}, nil, 200)
-		if !reflect.DeepEqual(data.([]gateway.MAC), []gateway.MAC{mac2}) {
+		if !reflect.DeepEqual(data.([]address.MAC), []address.MAC{mac2}) {
 			t.Fatalf("did not get expected MAC: %v", data)
 		}
 	})
@@ -132,7 +134,7 @@ func TestIPSetHandlers(t *testing.T) {
 	t.Run("get no members after deleting one by one", func(t *testing.T) {
 		data := AssertHandler(
 			t, getter, []string{"test", "members"}, nil, 200)
-		if !reflect.DeepEqual(data.([]gateway.MAC), []gateway.MAC{}) {
+		if !reflect.DeepEqual(data.([]address.MAC), []address.MAC{}) {
 			t.Fatalf("did not get empty list of MACs: %v", data)
 		}
 	})
@@ -151,7 +153,7 @@ func TestIPSetHandlers(t *testing.T) {
 	t.Run("get no members after deleting all at once", func(t *testing.T) {
 		data := AssertHandler(
 			t, getter, []string{"test", "members"}, nil, 200)
-		if !reflect.DeepEqual(data.([]gateway.MAC), []gateway.MAC{}) {
+		if !reflect.DeepEqual(data.([]address.MAC), []address.MAC{}) {
 			t.Fatalf("did not get empty list of MACs: %v", data)
 		}
 	})

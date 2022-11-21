@@ -7,11 +7,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/plockc/gateway"
+	"github.com/plockc/gateway/namespace"
 )
 
 var urlRegex *regexp.Regexp
-var Runner = &gateway.Runner{}
+var NS = namespace.NS("")
 
 func init() {
 	urlRegex = regexp.MustCompile(`^/v1/[^/]+(/?$)|(/.+)$`)
