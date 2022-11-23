@@ -1,12 +1,19 @@
 package handle_test
 
 import (
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
+	"net/http"
+	"net/url"
 	"os"
+	"runtime/debug"
+	"strings"
 	"testing"
 
 	"github.com/plockc/gateway/funcs"
 	"github.com/plockc/gateway/handle"
+	"github.com/plockc/gateway/iptables"
 	"github.com/plockc/gateway/namespace"
 	"github.com/plockc/gateway/resource"
 	"github.com/plockc/gateway/runner"
@@ -16,33 +23,111 @@ var (
 	testNS = namespace.NS("test")
 )
 
-func AssertHandler(t *testing.T, handler handle.TypedHandler, parts []string, body any, expectedCode int) any {
-	code, data, err := handler.Handler(parts, body)
+func Failf(t *testing.T, errFmt string, args ...any) {
+	namespaces, err := namespace.NS("").List()
+	if err != nil {
+		panic("could not list namespaces")
+	}
+	for _, ns := range namespaces {
+		sets, err := iptables.NewIPSet(namespace.NS(ns), "").List()
+		if err != nil {
+			panic("could not list ip sets for ns " + string(ns))
+		}
+		fmt.Printf("Namespace '%s' has IP Sets: %v\n", ns, sets)
+	}
+	t.Log(string(debug.Stack()))
+	t.Fatalf(errFmt, args...)
+}
+
+type TestResponseWriter struct {
+	Body []byte
+	Code int
+}
+
+func (w *TestResponseWriter) Header() http.Header {
+	return http.Header{}
+}
+
+func (w *TestResponseWriter) Write(b []byte) (int, error) {
+	w.Body = b
+	return len(b), nil
+}
+
+func (w *TestResponseWriter) WriteHeader(statusCode int) {
+	w.Code = statusCode
+}
+
+func AssertHandler[T any](t *testing.T, method, path string, bodyObj any, expectedCode int) *T {
+	resp, err := testRequest[T](t, method, path, bodyObj, expectedCode)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if code != expectedCode {
-		t.Fatalf("expected code %d but got code %d and body: %v", expectedCode, code, data)
-	}
-	return data
+	return resp
 }
 
-func AssertHandlerFail(t *testing.T, handler handle.TypedHandler, parts []string, body any, expectedCode int) any {
-	code, data, err := handler.Handler(parts, body)
-	if code != expectedCode || err == nil {
-		t.Fatalf(
-			"expected code %d and an error, but got code %d, err: %v, and body: %v",
-			expectedCode, code, err, data,
+func testRequest[T any](t *testing.T, method, path string, bodyObj any, expectedCode int) (*T, error) {
+	url, err := url.Parse(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	reqBody, err := json.Marshal(bodyObj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	header := http.Header{}
+	header.Set("Content-Type", "application/json")
+	req := http.Request{
+		Method: method,
+		URL:    url,
+		Body:   ioutil.NopCloser(strings.NewReader(string(reqBody))),
+		Header: header,
+	}
+	responseWriter := &TestResponseWriter{}
+	handle.Api{}.ServeHTTP(responseWriter, &req)
+
+	if responseWriter.Code != expectedCode {
+		Failf(
+			t, "expected code %d but got code %d and body: %s",
+			expectedCode, responseWriter.Code, string(responseWriter.Body),
 		)
 	}
-	return data
+	var responseObj *T
+	if len(responseWriter.Body) > 0 {
+		if expectedCode >= 400 {
+			var errData map[string]interface{}
+			err := json.Unmarshal(responseWriter.Body, &errData)
+			if err != nil {
+				t.Fatal(err)
+			}
+			msg, ok := errData["error"]
+			if !ok {
+				t.Fatalf("missing error message from %v", errData)
+			}
+			if len(errData) != 1 {
+				t.Fatalf("expected only error in response body, got %v", errData)
+			}
+			return nil, fmt.Errorf("%v", msg)
+		} else {
+			if err := handle.FromJson(responseWriter.Body, &responseObj); err != nil {
+				t.Fatal(err)
+			}
+		}
+	}
+	return responseObj, nil
+}
+
+func AssertHandlerFail(t *testing.T, method, path string, bodyObj any, expectedCode int) {
+	_, err := testRequest[any](t, method, path, bodyObj, expectedCode)
+	if err == nil {
+		t.Fatal("expected error")
+	}
 }
 
 func TestMain(m *testing.M) {
 	// it is the internal client outbound that can get blocked for downtime
 	exitCode := func() int {
 		testRunner := runner.NamespacedRunner(testNS)
-		testNSLifecycle := resource.Lifecycle[string]{Resource: testNS}
+		testNSLifecycle := resource.Lifecycle{Resource: testNS}
 		handle.NS = testNS
 
 		testNSLifecycle.EnsureDeleted()

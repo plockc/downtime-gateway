@@ -13,47 +13,49 @@ type Member struct {
 	address.MAC
 	// avoids embedding so this can be assured to implement the Resource interface
 	IPSet IPSet
+	resource.FailUnimplementedMethods
 }
 
-var _ resource.Resource[address.MAC] = &Member{}
+var _ resource.Resource = &Member{}
 
 func NewMember(ipSet IPSet, mac address.MAC) Member {
 	return Member{MAC: mac, IPSet: ipSet}
 }
 
-func (m Member) Id() address.MAC {
-	return m.MAC
-}
-
-func (m Member) String() string {
+func (m Member) Id() string {
 	return m.MAC.String()
 }
 
+func (m Member) String() string {
+	return m.Id()
+}
+
 func (m Member) Create() error {
-	return m.IPSet.Runner.Line("ipset add " + m.IPSet.Name + " " + m.MAC.String())
+	return m.IPSet.Runner.Line("ipset add " + m.IPSet.Id() + " " + m.MAC.String())
 }
 
 func (m Member) Delete() error {
-	return m.IPSet.Runner.Line("ipset del " + m.IPSet.Name + " " + m.MAC.String())
+	return m.IPSet.Runner.Line("ipset del " + m.IPSet.Id() + " " + m.MAC.String())
 }
 
-func (m Member) List() ([]address.MAC, error) {
+func (m Member) List() ([]string, error) {
 	run := m.IPSet.Runner
-	err := run.Line("ipset save -sorted " + m.IPSet.Name)
+	err := run.Line("ipset save -sorted " + m.IPSet.Id())
 	if err != nil {
-		return nil, fmt.Errorf("failed to list members of ipset %s: %w", m.IPSet.Name, err)
+		return nil, fmt.Errorf("failed to list members of ipset '%s': %w", m.IPSet.Id(), err)
 	}
 	elems := funcs.Keep(strings.Split(run.LastOut(), "\n"), func(s string) bool {
 		return strings.HasPrefix(s, "add ")
 	})
-	elems = funcs.Map(elems, func(s string) string {
-		return strings.TrimPrefix(s, "add "+m.IPSet.Name+" ")
-	})
-	macs, err := funcs.MapErrable(elems, func(s string) (address.MAC, error) {
-		return address.MACFromString(s)
+	macIds := funcs.Map(elems, func(s string) string {
+		return strings.TrimPrefix(s, "add "+m.IPSet.Id()+" ")
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse macs: %w", err)
 	}
-	return macs, nil
+	return macIds, nil
+}
+
+func (m Member) Clear() error {
+	return m.IPSet.Runner.Line("ipset flush " + m.IPSet.Id())
 }

@@ -9,38 +9,27 @@ import (
 )
 
 type IPSet struct {
-	Name   string
-	Runner *runner.Runner
+	resource.Named `json:"-"`
+	Runner         *runner.Runner `json:"-"`
+	resource.FailUnimplementedMethods
 }
 
-var _ resource.Resource[string] = IPSet{}
+var _ resource.Resource = IPSet{}
 
-func NewIPSet(name string, ns namespace.NS) IPSet {
-	return IPSet{Name: name, Runner: runner.NamespacedRunner(ns)}
-}
-
-func (ipSet IPSet) Id() string {
-	return ipSet.Name
-}
-
-func (ipSet IPSet) String() string {
-	return ipSet.Id()
-}
-
-func (ipSet IPSet) LastResult() runner.Result {
-	return ipSet.Runner.Last()
+func NewIPSet(ns namespace.NS, name string) IPSet {
+	return IPSet{Named: resource.Named(name), Runner: runner.NamespacedRunner(ns)}
 }
 
 func (ipSet IPSet) Delete() error {
-	return ipSet.Runner.Line("ipset destroy " + ipSet.Name)
+	return ipSet.Runner.Line("ipset destroy " + ipSet.Id())
 }
 
 func (ipSet IPSet) Create() error {
 	return ipSet.Runner.Line(
-		"ipset -N "+ipSet.Name+" hash:mac",
-		"ipset -N -exist "+ipSet.Name+"-builder hash:mac",
-		"ipset swap "+ipSet.Name+"-builder "+ipSet.Name,
-		"ipset destroy "+ipSet.Name+"-builder",
+		"ipset -N "+ipSet.Id()+" hash:mac",
+		"ipset -N -exist "+ipSet.Id()+"-builder hash:mac",
+		"ipset swap "+ipSet.Id()+"-builder "+ipSet.Id(),
+		"ipset destroy "+ipSet.Id()+"-builder",
 	)
 }
 
@@ -49,10 +38,6 @@ func (ipSet IPSet) List() ([]string, error) {
 		return nil, err
 	}
 	return strings.Split(ipSet.Runner.LastOut(), "\n"), nil
-}
-
-func (ipSet IPSet) Clear() error {
-	return ipSet.Runner.Line("ipset flush " + ipSet.Name)
 }
 
 func (ipSet IPSet) Match() string {

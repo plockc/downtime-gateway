@@ -10,7 +10,7 @@ import (
 
 type NS string
 
-var _ resource.Resource[string] = NS("")
+var _ resource.Resource = NS("")
 
 func (ns NS) Id() string {
 	return string(ns)

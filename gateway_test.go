@@ -94,7 +94,7 @@ func TestBlockSet(t *testing.T) {
 	ClearIPTables(gw, t)
 	gwRunner := runner.NamespacedRunner(gw)
 	clientRunner := runner.NamespacedRunner(client)
-	ipSet := iptables.NewIPSet("test", namespace.NS(gw))
+	ipSet := iptables.NewIPSet(gw, "test")
 	ipSetMember := iptables.NewMember(ipSet, clientMAC)
 	if err := funcs.Do(
 		ipSet.Create,
@@ -118,10 +118,10 @@ func TestAllowSet(t *testing.T) {
 	ClearIPTables(gw, t)
 	gwRunner := runner.NamespacedRunner(gw)
 	clientRunner := runner.NamespacedRunner(client)
-	ipSet := iptables.NewIPSet("test", namespace.NS(gw))
-	ipSetLC := resource.Lifecycle[string]{Resource: ipSet}
+	ipSet := iptables.NewIPSet(gw, "test")
+	ipSetLC := resource.Lifecycle{Resource: ipSet}
 	ipSetMember := iptables.NewMember(ipSet, clientMAC)
-	ipSetMemberLC := resource.Lifecycle[address.MAC]{Resource: ipSetMember}
+	ipSetMemberLC := resource.Lifecycle{Resource: ipSetMember}
 	var ignored bool
 	if err := funcs.Do(
 		funcs.AssignFunc(ipSetLC.Ensure, &ignored),
@@ -150,7 +150,7 @@ func TestMain(m *testing.M) {
 
 		var ignored bool
 		for _, ns := range []namespace.NS{server, client, gw} {
-			lc := resource.Lifecycle[string]{Resource: ns}
+			lc := resource.Lifecycle{Resource: ns}
 			if err := funcs.Do(
 				funcs.AssignFunc(lc.EnsureDeleted, &ignored),
 				funcs.AssignFunc(lc.Ensure, &ignored),

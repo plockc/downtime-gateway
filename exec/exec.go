@@ -26,7 +26,7 @@ func Exec(cmd []string) (int, string, error) {
 	case *exec.ExitError:
 		return t.ExitCode(), outString, fmt.Errorf(
 			"`%s` failed with exit code %d: %s",
-			c.String(), t.ExitCode(), string(t.Stderr),
+			c.String(), t.ExitCode(), string(outString),
 		)
 	case error:
 		return 1, outString, fmt.Errorf(
