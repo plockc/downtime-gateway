@@ -18,8 +18,12 @@ func (member Member) String() string {
 	return member.IPSet.String() + ":member[" + member.Name + "]"
 }
 
-func (member Member) Resource() resource.Resource {
-	return MemberRes{Member: member}
+func (m Member) MemberResource() MemberRes {
+	return MemberRes{Member: m}
+}
+
+func NewMember(ipSet IPSet, mac address.MAC) Member {
+	return Member{MAC: mac, IPSet: ipSet}
 }
 
 var _ resource.Resource = &MemberRes{}
@@ -29,8 +33,8 @@ type MemberRes struct {
 	resource.FailUnimplementedMethods
 }
 
-func NewMember(ipSet IPSet, mac address.MAC) Member {
-	return Member{MAC: mac, IPSet: ipSet}
+func NewMemberResource(m Member) MemberRes {
+	return MemberRes{Member: m}
 }
 
 func (m MemberRes) Id() string {

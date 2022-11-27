@@ -1,11 +1,15 @@
 package iptables
 
 import (
+	"fmt"
+	"regexp"
 	"strings"
 
+	"github.com/plockc/gateway/funcs"
 	"github.com/plockc/gateway/resource"
-	"golang.org/x/exp/slices"
 )
+
+var chainRegex = regexp.MustCompile(`\w+ (\w+) .*`)
 
 type Chain struct {
 	Name  string
@@ -16,11 +20,23 @@ func NewChain(table Table, name string) Chain {
 	return Chain{Name: name, Table: table}
 }
 
+func (c Chain) ChainResource() ChainRes {
+	return ChainRes{Chain: c}
+}
+
+func (c Chain) String() string {
+	return c.Table.String() + ":chain[" + c.Name + "]"
+}
+
 var _ resource.Resource = ChainRes{}
 
 type ChainRes struct {
 	resource.FailUnimplementedMethods
 	Chain
+}
+
+func NewChainResource(c Chain) ChainRes {
+	return ChainRes{Chain: c}
 }
 
 func (chain ChainRes) Id() string {
@@ -35,63 +51,25 @@ func (chain ChainRes) Create() error {
 	return chain.Runner().Line(NEW.ChainCmd(chain.Id()))
 }
 
-func ListFilterChainsCmd() []string {
-
-	return []string{
-		"bash", "-c", `iptables-save \
-		| sed -n '/^*filter/,/^[^:]/{/^:/!d;s/:\(\w*\) .*/\1/;p}'`,
+func (chain ChainRes) List() ([]string, error) {
+	run := chain.Runner()
+	results, err := run.ExecLine("iptables -t " + chain.Table.Name + " -L")
+	if err != nil {
+		return nil, err
 	}
+	chainLines := funcs.Keep(strings.Split(results.Out, "\n"), func(s string) bool {
+		return strings.HasPrefix(s, "Chain")
+	})
+	return funcs.Map(chainLines, func(s string) string {
+		chainMatches := chainRegex.FindStringSubmatch(s)
+		if len(chainMatches) != 2 {
+			err = fmt.Errorf("did not find chain name in '%s'", s)
+			return ""
+		}
+		return chainMatches[1]
+	}), err
 }
 
-func EnsureChainFunc(runner *resource.Runner, chain string) func() error {
-	return func() error {
-		if err := runner.Run(ListFilterChainsCmd()); err != nil {
-			return err
-		}
-		if !slices.Contains(strings.Split(runner.Last().Out, "\n"), chain) {
-			if err := runner.Line(NEW.ChainCmd(chain)); err != nil {
-				return err
-			}
-		}
-		runner.Line(
-			CHECK.FilterRule("FORWARD", "--out-interface "+InternetDevice, chain),
-		)
-		if runner.Last().Code != 0 {
-			return runner.Line(
-				APPEND.FilterRule("FORWARD", "--out-interface "+InternetDevice, chain),
-			)
-		}
-		return nil
-	}
-}
-
-func RemoveChainCmdFunc(runner *resource.Runner, chain string) func() error {
-	return func() error {
-		if err := runner.Run(ListFilterChainsCmd()); err != nil {
-			return err
-		}
-		if slices.Contains(strings.Split(runner.Last().Out, "\n"), chain) {
-			err := runner.Line(
-				CHECK.FilterRule("FORWARD", "--out-interface "+InternetDevice, chain),
-			)
-			if err != nil && runner.Last().Code > 1 {
-				return err
-			}
-			if runner.Last().Code == 0 {
-				err := runner.Line(
-					DELETE.FilterRule("FORWARD", "--out-interface "+InternetDevice, chain),
-				)
-				if err != nil {
-					return err
-				}
-			}
-			if err := runner.Line(
-				FLUSH.ChainCmd(chain),
-				DELETE_CHAIN.ChainCmd(chain),
-			); err != nil {
-				return err
-			}
-		}
-		return nil
-	}
+func (chain ChainRes) Clear() error {
+	return chain.Runner().Line("iptables -X")
 }

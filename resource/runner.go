@@ -88,6 +88,14 @@ func (r *Runner) Line(cmds ...string) error {
 	return r.Run(multiline.Multiline(cmds).Split()...)
 }
 
+func (r *Runner) ExecLine(cmdline string) (Result, error) {
+	err := r.Line(cmdline)
+	if err != nil {
+		return Result{}, err
+	}
+	return r.Last(), nil
+}
+
 func (r *Runner) Run(cmds ...[]string) error {
 	for _, cmd := range cmds {
 		// namspace the command if we're in a namespace

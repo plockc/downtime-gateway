@@ -11,9 +11,9 @@ var Namespaces = Resources{
 	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
 		switch len(ids) {
 		case 0, 1:
-			return resource.NewNS("").Resource(), nil
+			return resource.NewNS("").NSResource(), nil
 		default:
-			return resource.NewNS(ids[0]).Resource(), nil
+			return resource.NewNS(ids[0]).NSResource(), nil
 		}
 	},
 	T: reflect.TypeOf([]string{}),

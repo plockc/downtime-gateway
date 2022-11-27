@@ -22,12 +22,12 @@ var (
 )
 
 func Failf(t *testing.T, errFmt string, args ...any) {
-	namespaces, err := resource.NewNS("").Resource().List()
+	namespaces, err := resource.NewNS("").NSResource().List()
 	if err != nil {
 		panic("could not list namespaces")
 	}
 	for _, ns := range namespaces {
-		sets, err := iptables.NewIPSet(resource.NewNS(ns), "").Resource().List()
+		sets, err := iptables.NewIPSet(resource.NewNS(ns), "").NSResource().List()
 		if err != nil {
 			panic("could not list ip sets for ns " + string(ns))
 		}
@@ -125,7 +125,7 @@ func TestMain(m *testing.M) {
 	// it is the internal client outbound that can get blocked for downtime
 	exitCode := func() int {
 		testRunner := testNS.Runner()
-		testNSLifecycle := resource.Lifecycle{Resource: testNS.Resource()}
+		testNSLifecycle := resource.Lifecycle{Resource: testNS.NSResource()}
 		handle.NS = testNS
 
 		testNSLifecycle.EnsureDeleted()

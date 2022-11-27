@@ -34,8 +34,11 @@ func PingCmd(target net.IPNet) string {
 
 func ClearIPTables(ns resource.NS, t *testing.T) {
 	gwRunner := gw.Runner()
+	var table = iptables.NewTable(ns, "")
 	if err := funcs.Do(
-		iptables.RemoveChainCmdFunc(gwRunner, iptables.DOWNTIME_CHAIN),
+		resource.NewLifecycle(
+			iptables.NewChainResource(iptables.NewChain(table, "")),
+		).Clear,
 		gwRunner.LineFunc(iptables.FLUSH.ChainCmd("FORWARD")),
 		gwRunner.LineFunc(iptables.FLUSH.ChainCmd("OUTPUT")),
 		gwRunner.LineFunc(iptables.FLUSH.ChainCmd("INPUT")),
@@ -93,12 +96,15 @@ func TestBlockSet(t *testing.T) {
 	gwRunner := gw.Runner()
 	clientRunner := client.Runner()
 	ipSet := iptables.NewIPSet(gw, "test")
-	ipSetRes := ipSet.Resource()
-	ipSetMemberRes := iptables.NewMember(ipSet, clientMAC).Resource()
+	ipSetRes := ipSet.IPSetResource()
+	ipSetMemberRes := iptables.NewMember(ipSet, clientMAC).MemberResource()
+	table := iptables.FilterTable(gw)
+	chainRes := iptables.NewChain(table, iptables.DOWNTIME_CHAIN).ChainResource()
+	var ignored bool
 	if err := funcs.Do(
 		ipSetRes.Create,
 		ipSetMemberRes.Create,
-		iptables.EnsureChainFunc(gwRunner, iptables.DOWNTIME_CHAIN),
+		funcs.AssignFunc(resource.NewLifecycle(chainRes).Ensure, &ignored),
 		gwRunner.LineFunc(iptables.APPEND.FilterRule(
 			iptables.DOWNTIME_CHAIN, ipSet.Match(), iptables.DROP),
 		),
@@ -118,14 +124,17 @@ func TestAllowSet(t *testing.T) {
 	gwRunner := gw.Runner()
 	clientRunner := client.Runner()
 	ipSet := iptables.NewIPSet(gw, "test")
-	ipSetLC := resource.Lifecycle{Resource: ipSet.Resource()}
+	ipSetLC := resource.Lifecycle{Resource: ipSet.IPSetResource()}
 	ipSetMember := iptables.NewMember(ipSet, clientMAC)
-	ipSetMemberLC := resource.Lifecycle{Resource: ipSetMember.Resource()}
+	ipSetMemberLC := resource.Lifecycle{Resource: ipSetMember.MemberResource()}
+	downtimeChainLC := resource.NewLifecycle(
+		iptables.NewChain(iptables.FilterTable(gw), iptables.DOWNTIME_CHAIN).ChainResource(),
+	)
 	var ignored bool
 	if err := funcs.Do(
 		funcs.AssignFunc(ipSetLC.Ensure, &ignored),
 		funcs.AssignFunc(ipSetMemberLC.Ensure, &ignored),
-		iptables.EnsureChainFunc(gwRunner, iptables.DOWNTIME_CHAIN),
+		funcs.AssignFunc(downtimeChainLC.Ensure, &ignored),
 		gwRunner.LineFunc(iptables.APPEND.FilterRule(
 			iptables.DOWNTIME_CHAIN, ipSet.Match(), iptables.RETURN),
 		),
@@ -149,7 +158,7 @@ func TestMain(m *testing.M) {
 
 		var ignored bool
 		for _, ns := range []resource.NS{server, client, gw} {
-			lc := resource.Lifecycle{Resource: ns.Resource()}
+			lc := resource.Lifecycle{Resource: ns.NSResource()}
 			if err := funcs.Do(
 				funcs.AssignFunc(lc.EnsureDeleted, &ignored),
 				funcs.AssignFunc(lc.Ensure, &ignored),

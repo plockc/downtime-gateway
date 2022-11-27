@@ -16,7 +16,7 @@ var Chains = Resources{
 		}
 		switch len(ids) {
 		default:
-			return iptables.NewChain(table, ids[2]).Resource(), nil
+			return iptables.NewChainResource(iptables.NewChain(table, ids[2])), nil
 		}
 	},
 	T:       reflect.TypeOf(""),

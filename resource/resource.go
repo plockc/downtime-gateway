@@ -6,14 +6,6 @@ import (
 	"golang.org/x/exp/slices"
 )
 
-type Lifecycle struct {
-	Resource
-}
-
-type Resourcer interface {
-	Resource() Resource
-}
-
 type Resource interface {
 	Id() string
 	// Create returns true if created vs already existing
@@ -22,6 +14,14 @@ type Resource interface {
 	Delete() error
 	List() ([]string, error)
 	Clear() error
+}
+
+type Lifecycle struct {
+	Resource
+}
+
+func NewLifecycle(r Resource) Lifecycle {
+	return Lifecycle{Resource: r}
 }
 
 func (lf Lifecycle) Exists() (bool, error) {

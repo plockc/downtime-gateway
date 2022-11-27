@@ -13,13 +13,21 @@ type Table struct {
 	resource.NS
 }
 
+func FilterTable(ns resource.NS) Table {
+	return Table{Name: "filter", NS: ns}
+}
+
+func NewTable(ns resource.NS, name string) Table {
+	return Table{Name: name, NS: ns}
+}
+
 type TableRes struct {
 	Table
 	resource.FailUnimplementedMethods
 }
 
-func NewTable(ns resource.NS, name string) Table {
-	return Table{Name: name, NS: ns}
+func NewTableResource(t Table) TableRes {
+	return TableRes{Table: t}
 }
 
 func (t TableRes) Id() string {

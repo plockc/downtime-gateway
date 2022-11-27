@@ -17,16 +17,16 @@ func NewIPSet(ns resource.NS, name string) IPSet {
 	return IPSet{Name: name, NS: ns}
 }
 
-func (ipSet IPSet) Resource() resource.Resource {
-	return IPSetRes{IPSet: ipSet}
-}
-
 func (ipSet IPSet) Match() string {
 	return "-m set --match-set " + ipSet.Name + " src"
 }
 
 func (ipSet IPSet) String() string {
 	return ipSet.NS.String() + ":ipSet[" + ipSet.Name + "]"
+}
+
+func (ipSet IPSet) IPSetResource() IPSetRes {
+	return IPSetRes{IPSet: ipSet}
 }
 
 type IPSetRes struct {

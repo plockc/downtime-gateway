@@ -20,9 +20,6 @@ func ClearIPSets(ns resource.NS, t *testing.T, set ...string) {
 
 func TestIPSetHandlers(t *testing.T) {
 	ClearIPSets(testNS, t, "test")
-	//getter := handle.SetsHandlers[http.MethodGet]
-	//putter := handle.SetsHandlers[http.MethodPut]
-	//deleter := handle.SetsHandlers[http.MethodDelete]
 
 	t.Run("getting set that does not exist", func(t *testing.T) {
 		AssertHandlerFail(t, http.MethodGet, "/api/v1/netns/test/ipsets/test", nil, 404)

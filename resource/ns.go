@@ -15,7 +15,7 @@ func NewNS(name string) NS {
 	return NS{Name: name}
 }
 
-func (ns NS) Resource() Resource {
+func (ns NS) NSResource() Resource {
 	return NSRes{Name: ns.Name}
 }
 

@@ -26,7 +26,7 @@ var Tables = Resources{
 		if err != nil {
 			return nil, err
 		}
-		return table.Resource(), nil
+		return iptables.NewTableResource(table), nil
 	},
 	T: reflect.TypeOf(""),
 	Relationships: map[string]Resources{

@@ -27,7 +27,7 @@ var IPSets = Resources{
 		if err != nil {
 			return nil, err
 		}
-		return ipSet.Resource(), nil
+		return ipSet.IPSetResource(), nil
 	},
 	T: reflect.TypeOf(address.MAC{}),
 	Relationships: map[string]Resources{
@@ -47,10 +47,10 @@ var IPSetMembers = Resources{
 		case 2:
 			return nil, fmt.Errorf("missing ipset name")
 		case 3:
-			return iptables.NewMember(ipSet, address.MAC{}).Resource(), nil
+			return iptables.NewMemberResource(iptables.NewMember(ipSet, address.MAC{})), nil
 		default:
 			mac, err := address.MACFromString(ids[3])
-			return iptables.NewMember(ipSet, mac).Resource(), err
+			return iptables.NewMemberResource(iptables.NewMember(ipSet, mac)), err
 		}
 	},
 	T:       nil,
