@@ -10,8 +10,11 @@ type Lifecycle struct {
 	Resource
 }
 
+type Resourcer interface {
+	Resource() Resource
+}
+
 type Resource interface {
-	fmt.Stringer
 	Id() string
 	// Create returns true if created vs already existing
 	Create() error

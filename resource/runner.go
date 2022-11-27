@@ -1,4 +1,4 @@
-package runner
+package resource
 
 import (
 	"strconv"
@@ -6,11 +6,13 @@ import (
 
 	"github.com/plockc/gateway/exec"
 	"github.com/plockc/gateway/multiline"
-	"github.com/plockc/gateway/namespace"
 )
 
 type Runner struct {
-	namespace.NS
+	// prevent Id and String from promoting so
+	// can embed Runner without conflicting with
+	// an embedded resource.Named
+	NS
 	Results []Result
 }
 
@@ -27,24 +29,24 @@ func (d Result) String() string {
 	return strings.Join(d.Cmd, " ") + "\n" + d.Out
 }
 
-func NamespacedRunner(ns namespace.NS) *Runner {
+func NamespacedRunner(ns NS) *Runner {
 	return &Runner{NS: ns}
 }
 
 func (r *Runner) WrapCmd(cmd []string) []string {
-	if r == nil || r.NS == "" {
+	if r == nil || r.NSName() == "" {
 		return cmd
 	}
 	return append(
-		[]string{"ip", "netns", "exec", string(r.NS)}, cmd...,
+		[]string{"ip", "netns", "exec", string(r.NSName())}, cmd...,
 	)
 }
 
 func (r *Runner) WrapCmdLine(cmd string) string {
-	if r == nil || r.NS == "" {
+	if r == nil || r.NSName() == "" {
 		return cmd
 	}
-	return "ip netns exec " + string(r.NS) + " " + cmd
+	return "ip netns exec " + string(r.NSName()) + " " + cmd
 }
 
 func (r *Runner) WrapCmdLines(cmds []string) []string {
@@ -89,7 +91,7 @@ func (r *Runner) Line(cmds ...string) error {
 func (r *Runner) Run(cmds ...[]string) error {
 	for _, cmd := range cmds {
 		// namspace the command if we're in a namespace
-		if r.NS != "" {
+		if r.NSName() != "" {
 			cmd = r.WrapCmd(cmd)
 		}
 		code, out, err := exec.Exec(cmd)

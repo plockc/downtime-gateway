@@ -14,22 +14,20 @@ import (
 	"github.com/plockc/gateway/funcs"
 	"github.com/plockc/gateway/handle"
 	"github.com/plockc/gateway/iptables"
-	"github.com/plockc/gateway/namespace"
 	"github.com/plockc/gateway/resource"
-	"github.com/plockc/gateway/runner"
 )
 
 var (
-	testNS = namespace.NS("test")
+	testNS = resource.NewNS("test")
 )
 
 func Failf(t *testing.T, errFmt string, args ...any) {
-	namespaces, err := namespace.NS("").List()
+	namespaces, err := resource.NewNS("").Resource().List()
 	if err != nil {
 		panic("could not list namespaces")
 	}
 	for _, ns := range namespaces {
-		sets, err := iptables.NewIPSet(namespace.NS(ns), "").List()
+		sets, err := iptables.NewIPSet(resource.NewNS(ns), "").Resource().List()
 		if err != nil {
 			panic("could not list ip sets for ns " + string(ns))
 		}
@@ -126,8 +124,8 @@ func AssertHandlerFail(t *testing.T, method, path string, bodyObj any, expectedC
 func TestMain(m *testing.M) {
 	// it is the internal client outbound that can get blocked for downtime
 	exitCode := func() int {
-		testRunner := runner.NamespacedRunner(testNS)
-		testNSLifecycle := resource.Lifecycle{Resource: testNS}
+		testRunner := testNS.Runner()
+		testNSLifecycle := resource.Lifecycle{Resource: testNS.Resource()}
 		handle.NS = testNS
 
 		testNSLifecycle.EnsureDeleted()

@@ -3,29 +3,47 @@ package iptables
 import (
 	"strings"
 
-	"github.com/plockc/gateway/namespace"
 	"github.com/plockc/gateway/resource"
-	"github.com/plockc/gateway/runner"
 )
 
 type IPSet struct {
-	resource.Named `json:"-"`
-	Runner         *runner.Runner `json:"-"`
+	Name string
+	resource.NS
+}
+
+var _ resource.Resource = IPSetRes{}
+
+func NewIPSet(ns resource.NS, name string) IPSet {
+	return IPSet{Name: name, NS: ns}
+}
+
+func (ipSet IPSet) Resource() resource.Resource {
+	return IPSetRes{IPSet: ipSet}
+}
+
+func (ipSet IPSet) Match() string {
+	return "-m set --match-set " + ipSet.Name + " src"
+}
+
+func (ipSet IPSet) String() string {
+	return ipSet.NS.String() + ":ipSet[" + ipSet.Name + "]"
+}
+
+type IPSetRes struct {
 	resource.FailUnimplementedMethods
+	IPSet
 }
 
-var _ resource.Resource = IPSet{}
-
-func NewIPSet(ns namespace.NS, name string) IPSet {
-	return IPSet{Named: resource.Named(name), Runner: runner.NamespacedRunner(ns)}
+func (ipSet IPSetRes) Id() string {
+	return ipSet.Name
 }
 
-func (ipSet IPSet) Delete() error {
-	return ipSet.Runner.Line("ipset destroy " + ipSet.Id())
+func (ipSet IPSetRes) Delete() error {
+	return ipSet.Runner().Line("ipset destroy " + ipSet.Id())
 }
 
-func (ipSet IPSet) Create() error {
-	return ipSet.Runner.Line(
+func (ipSet IPSetRes) Create() error {
+	return ipSet.Runner().Line(
 		"ipset -N "+ipSet.Id()+" hash:mac",
 		"ipset -N -exist "+ipSet.Id()+"-builder hash:mac",
 		"ipset swap "+ipSet.Id()+"-builder "+ipSet.Id(),
@@ -33,13 +51,10 @@ func (ipSet IPSet) Create() error {
 	)
 }
 
-func (ipSet IPSet) List() ([]string, error) {
-	if err := ipSet.Runner.Line("ipset list -n"); err != nil {
+func (ipSet IPSetRes) List() ([]string, error) {
+	runner := ipSet.Runner()
+	if err := runner.Line("ipset list -n"); err != nil {
 		return nil, err
 	}
-	return strings.Split(ipSet.Runner.LastOut(), "\n"), nil
-}
-
-func (ipSet IPSet) Match() string {
-	return "-m set --match-set " + ipSet.String() + " src"
+	return strings.Split(runner.LastOut(), "\n"), nil
 }

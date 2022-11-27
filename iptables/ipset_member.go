@@ -11,44 +11,52 @@ import (
 
 type Member struct {
 	address.MAC
-	// avoids embedding so this can be assured to implement the Resource interface
-	IPSet IPSet
-	resource.FailUnimplementedMethods
+	IPSet
 }
 
-var _ resource.Resource = &Member{}
+func (member Member) String() string {
+	return member.IPSet.String() + ":member[" + member.Name + "]"
+}
+
+func (member Member) Resource() resource.Resource {
+	return MemberRes{Member: member}
+}
+
+var _ resource.Resource = &MemberRes{}
+
+type MemberRes struct {
+	Member
+	resource.FailUnimplementedMethods
+}
 
 func NewMember(ipSet IPSet, mac address.MAC) Member {
 	return Member{MAC: mac, IPSet: ipSet}
 }
 
-func (m Member) Id() string {
+func (m MemberRes) Id() string {
 	return m.MAC.String()
 }
 
-func (m Member) String() string {
-	return m.Id()
+func (m MemberRes) Create() error {
+	return m.Runner().Line("ipset add " + m.IPSet.Name + " " + m.MAC.String())
 }
 
-func (m Member) Create() error {
-	return m.IPSet.Runner.Line("ipset add " + m.IPSet.Id() + " " + m.MAC.String())
+func (m MemberRes) Delete() error {
+	return m.Runner().Line("ipset del " + m.IPSet.Name + " " + m.MAC.String())
 }
 
-func (m Member) Delete() error {
-	return m.IPSet.Runner.Line("ipset del " + m.IPSet.Id() + " " + m.MAC.String())
-}
-
-func (m Member) List() ([]string, error) {
-	run := m.IPSet.Runner
-	err := run.Line("ipset save -sorted " + m.IPSet.Id())
+func (m MemberRes) List() ([]string, error) {
+	run := m.Runner()
+	setName := m.IPSet.Name
+	err := run.Line("ipset save -sorted " + setName)
 	if err != nil {
-		return nil, fmt.Errorf("failed to list members of ipset '%s': %w", m.IPSet.Id(), err)
+		return nil, fmt.Errorf("failed to list members of ipset '%s': %w", setName, err)
 	}
 	elems := funcs.Keep(strings.Split(run.LastOut(), "\n"), func(s string) bool {
 		return strings.HasPrefix(s, "add ")
 	})
 	macIds := funcs.Map(elems, func(s string) string {
-		return strings.TrimPrefix(s, "add "+m.IPSet.Id()+" ")
+		return strings.TrimPrefix(s, "add "+setName+" ")
 	})
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse macs: %w", err)
@@ -56,6 +64,6 @@ func (m Member) List() ([]string, error) {
 	return macIds, nil
 }
 
-func (m Member) Clear() error {
-	return m.IPSet.Runner.Line("ipset flush " + m.IPSet.Id())
+func (m MemberRes) Clear() error {
+	return m.Runner().Line("ipset flush " + m.IPSet.Name)
 }

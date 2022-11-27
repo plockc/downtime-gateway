@@ -1,6 +1,6 @@
 package iptables
 
-import "github.com/plockc/gateway/runner"
+import "github.com/plockc/gateway/resource"
 
 type IPRuleCmd string
 
@@ -17,7 +17,7 @@ func (iptc IPRuleCmd) FilterRule(chain, match, target string) string {
 	return "iptables " + string(iptc) + " " + chain + " " + match + " -j " + target
 }
 
-func EnsureIPRuleFunc(runner runner.Runner, chain, match, target string) func() error {
+func EnsureIPRuleFunc(runner resource.Runner, chain, match, target string) func() error {
 	return func() error {
 		err := runner.Line(CHECK.FilterRule(chain, match, target))
 		if err != nil {

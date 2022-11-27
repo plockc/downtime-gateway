@@ -16,7 +16,7 @@ var Versions = Resources{
 			if ids[0] != "v1" {
 				return nil, fmt.Errorf("only v1 supported")
 			}
-			return Version{Named: resource.Named(ids[0])}, nil
+			return Version{Name: ids[0]}, nil
 		}
 	},
 	T: nil,
@@ -28,7 +28,15 @@ var Versions = Resources{
 
 type Version struct {
 	resource.FailUnimplementedMethods
-	resource.Named
+	Name string
 }
 
 var _ resource.Resource = Version{}
+
+func (v Version) Id() string {
+	return v.Name
+}
+
+func (v Version) List() ([]string, error) {
+	return []string{"v1"}, nil
+}

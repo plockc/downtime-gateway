@@ -59,7 +59,6 @@ func (api Api) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// case: no ID for the requested resource, it's a GET-list() or DELETE-clear() request
 		// e.g. /api/v1/ns/test/ipsets/tvs (6 parts, so %2 == 0)
 		case i == len(parts) && (len(parts)%2 == 0):
-			fmt.Println("---- LIST ----")
 			switch req.Method {
 			// handle a GET request for a list - e.g. GET /api/v1/ns/test/ipsets/tvs
 			case http.MethodGet:
@@ -103,7 +102,6 @@ func (api Api) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 		// case: has ID for the requested resource
 		// e.g. /api/v1/ns/test
 		case i == len(parts)-1:
-			fmt.Println("---- SPECIFIC RESOURCE", req.Method, "----")
 			// Load the Body using the type specified in the handler
 			// this will be used for PUT / PATCH / POST
 			defer req.Body.Close()

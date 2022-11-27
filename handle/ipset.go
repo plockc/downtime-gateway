@@ -6,25 +6,28 @@ import (
 
 	"github.com/plockc/gateway/address"
 	"github.com/plockc/gateway/iptables"
-	"github.com/plockc/gateway/namespace"
 	"github.com/plockc/gateway/resource"
 )
 
-func NewIPSetHandler(ids ...string) (resource.Resource, error) {
+func NewIPSet(ids ...string) (iptables.IPSet, error) {
 	switch len(ids) {
 	case 0, 1:
-		return nil, fmt.Errorf("missing version and/or namespace")
+		return iptables.IPSet{}, fmt.Errorf("missing version and/or namespace")
 	case 2:
-		return iptables.NewIPSet(namespace.NS(ids[1]), ""), nil
+		return iptables.NewIPSet(resource.NewNS(ids[1]), ""), nil
 	default:
-		return iptables.NewIPSet(namespace.NS(ids[1]), ids[2]), nil
+		return iptables.NewIPSet(resource.NewNS(ids[1]), ids[2]), nil
 	}
 }
 
 var IPSets = Resources{
 	Name: "IP Set",
 	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
-		return NewIPSetHandler(ids...)
+		ipSet, err := NewIPSet(ids...)
+		if err != nil {
+			return nil, err
+		}
+		return ipSet.Resource(), nil
 	},
 	T: reflect.TypeOf(address.MAC{}),
 	Relationships: map[string]Resources{
@@ -36,16 +39,18 @@ var IPSets = Resources{
 var IPSetMembers = Resources{
 	Name: "IP Set Member",
 	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
-		ipSet, err := NewIPSetHandler(ids...)
+		ipSet, err := NewIPSet(ids...)
 		if err != nil {
 			return nil, err
 		}
 		switch len(ids) {
+		case 2:
+			return nil, fmt.Errorf("missing ipset name")
 		case 3:
-			return iptables.NewMember(ipSet.(iptables.IPSet), address.MAC{}), nil
+			return iptables.NewMember(ipSet, address.MAC{}).Resource(), nil
 		default:
 			mac, err := address.MACFromString(ids[3])
-			return iptables.NewMember(ipSet.(iptables.IPSet), mac), err
+			return iptables.NewMember(ipSet, mac).Resource(), err
 		}
 	},
 	T:       nil,

@@ -5,13 +5,12 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/plockc/gateway/namespace"
-	"github.com/plockc/gateway/runner"
+	"github.com/plockc/gateway/resource"
 	"golang.org/x/exp/slices"
 )
 
-func ClearIPSets(ns namespace.NS, t *testing.T, set ...string) {
-	runner := runner.NamespacedRunner(testNS)
+func ClearIPSets(ns resource.NS, t *testing.T, set ...string) {
+	runner := testNS.Runner()
 	for _, s := range set {
 		if err := runner.Line("ipset destroy -exist " + s); err != nil {
 			t.Fatalf("failed to clear ipsets: %v: %s", err, runner.LastOut())
@@ -74,12 +73,14 @@ func TestIPSetHandlers(t *testing.T) {
 				t.Fatalf("did not expect body: %#v", data)
 			}
 		})
-		data := AssertHandler[any](
-			t, http.MethodPut, "/api/v1/netns/test/ipsets/test/members/12:12:12:12:12:34", nil, 201,
-		)
-		if data != nil {
-			t.Fatalf("did not expect body: %#v", data)
-		}
+		t.Run("add second member", func(t *testing.T) {
+			data := AssertHandler[any](
+				t, http.MethodPut, "/api/v1/netns/test/ipsets/test/members/12:12:12:12:12:34", nil, 201,
+			)
+			if data != nil {
+				t.Fatalf("did not expect body: %#v", data)
+			}
+		})
 	}
 	t.Run("add members", addMembersTest)
 

@@ -6,10 +6,10 @@ import (
 	"log"
 	"net/http"
 
-	"github.com/plockc/gateway/namespace"
+	"github.com/plockc/gateway/resource"
 )
 
-var NS = namespace.NS("")
+var NS = resource.NewNS("")
 
 func Serve() {
 	http.Handle("/api/", Api{})

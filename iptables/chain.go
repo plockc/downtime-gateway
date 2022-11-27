@@ -3,31 +3,47 @@ package iptables
 import (
 	"strings"
 
-	"github.com/plockc/gateway/runner"
+	"github.com/plockc/gateway/resource"
 	"golang.org/x/exp/slices"
 )
 
-type ChainCmd string
+type Chain struct {
+	Name  string
+	Table `json:"-"`
+}
 
-const (
-	LIST         ChainCmd = "-L"
-	FLUSH        ChainCmd = "-F"
-	NEW          ChainCmd = "-N"
-	DELETE_CHAIN ChainCmd = "-X"
-)
+func NewChain(table Table, name string) Chain {
+	return Chain{Name: name, Table: table}
+}
 
-func (ipcc ChainCmd) ChainCmd(name string) string {
-	return "iptables " + string(ipcc) + " " + name
+var _ resource.Resource = ChainRes{}
+
+type ChainRes struct {
+	resource.FailUnimplementedMethods
+	Chain
+}
+
+func (chain ChainRes) Id() string {
+	return chain.Name
+}
+
+func (chain ChainRes) Delete() error {
+	return chain.Runner().Line(DELETE_CHAIN.ChainCmd(chain.Id()))
+}
+
+func (chain ChainRes) Create() error {
+	return chain.Runner().Line(NEW.ChainCmd(chain.Id()))
 }
 
 func ListFilterChainsCmd() []string {
+
 	return []string{
 		"bash", "-c", `iptables-save \
 		| sed -n '/^*filter/,/^[^:]/{/^:/!d;s/:\(\w*\) .*/\1/;p}'`,
 	}
 }
 
-func EnsureChainFunc(runner *runner.Runner, chain string) func() error {
+func EnsureChainFunc(runner *resource.Runner, chain string) func() error {
 	return func() error {
 		if err := runner.Run(ListFilterChainsCmd()); err != nil {
 			return err
@@ -49,7 +65,7 @@ func EnsureChainFunc(runner *runner.Runner, chain string) func() error {
 	}
 }
 
-func RemoveChainCmdFunc(runner *runner.Runner, chain string) func() error {
+func RemoveChainCmdFunc(runner *resource.Runner, chain string) func() error {
 	return func() error {
 		if err := runner.Run(ListFilterChainsCmd()); err != nil {
 			return err
