@@ -84,27 +84,43 @@ func (r *Runner) String() string {
 	return strings.Join(out, "\n")
 }
 
-func (r *Runner) Line(cmds ...string) error {
-	return r.Run(multiline.Multiline(cmds).Split()...)
+func (r *Runner) BatchLines(cmds ...string) error {
+	return r.Batch(multiline.Multiline(cmds).Split()...)
 }
 
 func (r *Runner) ExecLine(cmdline string) (Result, error) {
-	err := r.Line(cmdline)
+	err := r.BatchLines(cmdline)
 	if err != nil {
 		return Result{}, err
 	}
 	return r.Last(), nil
 }
 
-func (r *Runner) Run(cmds ...[]string) error {
+func (r *Runner) Exec(cmd []string) (Result, error) {
+	err := r.Batch(cmd)
+	if err != nil {
+		return Result{}, err
+	}
+	return r.Last(), nil
+}
+
+func (r *Runner) RunLine(cmdline string) error {
+	return r.Run(strings.Split(cmdline, " "))
+}
+
+func (r *Runner) Run(cmd []string) error {
+	// namspace the command if we're in a namespace
+	if r.NSName() != "" {
+		cmd = r.WrapCmd(cmd)
+	}
+	code, out, err := exec.Exec(cmd)
+	r.Results = append(r.Results, Result{Cmd: cmd, Out: out, Code: code})
+	return err
+}
+
+func (r *Runner) Batch(cmds ...[]string) error {
 	for _, cmd := range cmds {
-		// namspace the command if we're in a namespace
-		if r.NSName() != "" {
-			cmd = r.WrapCmd(cmd)
-		}
-		code, out, err := exec.Exec(cmd)
-		r.Results = append(r.Results, Result{Cmd: cmd, Out: out, Code: code})
-		if err != nil {
+		if err := r.Run(cmd); err != nil {
 			return err
 		}
 	}
@@ -112,18 +128,18 @@ func (r *Runner) Run(cmds ...[]string) error {
 	return nil
 }
 
-// will appends the outputs of cmds to the Runer
+// will appends the outputs of cmds to the Runner
 // appending so can debug the full chain of commands when used multiple times in Do(...)
-func (r *Runner) LineFunc(cmds ...string) func() error {
+func (r *Runner) BatchLinesFunc(cmds ...string) func() error {
 	return func() error {
-		return r.Run(multiline.Multiline(cmds).Split()...)
+		return r.Batch(multiline.Multiline(cmds).Split()...)
 	}
 }
 
 // will appends the outputs of cmds to the Runer
 // appending so can debug the full chain of commands when used multiple times in Do(...)
-func (r *Runner) Func(cmds ...[]string) func() error {
+func (r *Runner) BatchFunc(cmds ...[]string) func() error {
 	return func() error {
-		return r.Run(cmds...)
+		return r.Batch(cmds...)
 	}
 }

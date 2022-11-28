@@ -42,17 +42,17 @@ func (m MemberRes) Id() string {
 }
 
 func (m MemberRes) Create() error {
-	return m.Runner().Line("ipset add " + m.IPSet.Name + " " + m.MAC.String())
+	return m.Runner().RunLine("ipset add " + m.IPSet.Name + " " + m.MAC.String())
 }
 
 func (m MemberRes) Delete() error {
-	return m.Runner().Line("ipset del " + m.IPSet.Name + " " + m.MAC.String())
+	return m.Runner().RunLine("ipset del " + m.IPSet.Name + " " + m.MAC.String())
 }
 
 func (m MemberRes) List() ([]string, error) {
 	run := m.Runner()
 	setName := m.IPSet.Name
-	err := run.Line("ipset save -sorted " + setName)
+	err := run.RunLine("ipset save -sorted " + setName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to list members of ipset '%s': %w", setName, err)
 	}
@@ -69,5 +69,5 @@ func (m MemberRes) List() ([]string, error) {
 }
 
 func (m MemberRes) Clear() error {
-	return m.Runner().Line("ipset flush " + m.IPSet.Name)
+	return m.Runner().RunLine("ipset flush " + m.IPSet.Name)
 }

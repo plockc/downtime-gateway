@@ -1,4 +1,4 @@
-package handle_test
+package iptables_test
 
 import (
 	"reflect"
@@ -7,7 +7,7 @@ import (
 	"github.com/plockc/gateway/iptables"
 )
 
-func TestChainHandlers(t *testing.T) {
+func TestChainResource(t *testing.T) {
 	table := iptables.FilterTable(testNS)
 	chain := iptables.NewChain(table, "tchain")
 	chainNames := func(cs ...iptables.Chain) []string {
@@ -59,7 +59,7 @@ func TestChainHandlers(t *testing.T) {
 		t.Fatalf("expected standard 3 chains after delete: %v", chains)
 	}
 
-	// creeate two chain, test both in list
+	// create two chains, test both in list
 	chain2 := iptables.NewChain(table, "tchain2")
 	err = chainRes.Create()
 	if err != nil {

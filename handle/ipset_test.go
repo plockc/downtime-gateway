@@ -12,7 +12,7 @@ import (
 func ClearIPSets(ns resource.NS, t *testing.T, set ...string) {
 	runner := testNS.Runner()
 	for _, s := range set {
-		if err := runner.Line("ipset destroy -exist " + s); err != nil {
+		if err := runner.RunLine("ipset destroy -exist " + s); err != nil {
 			t.Fatalf("failed to clear ipsets: %v: %s", err, runner.LastOut())
 		}
 	}

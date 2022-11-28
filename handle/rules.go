@@ -1,17 +1,34 @@
 package handle
 
-///var RulesHandlers = MethodHandlers{
-///	http.MethodGet: TypedHandler{
-///		Handler: setGet,
-///		T:       reflect.TypeOf(gateway.IPSet{}),
-///	},
-///	http.MethodPut: TypedHandler{
-///		Handler: setPut,
-///		T:       reflect.TypeOf(gateway.IPSet{}),
-///	},
-///	//http.MethodPatch:  setPatch,
-///	http.MethodDelete: TypedHandler{
-///		Handler: setDelete,
-///		T:       reflect.TypeOf(gateway.IPSet{}),
-///	},
-///}
+import (
+	"reflect"
+	"strconv"
+
+	"github.com/plockc/gateway/iptables"
+	"github.com/plockc/gateway/resource"
+)
+
+var Rules = Resources{
+	Name: "IPTables Rules",
+	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
+		chain, err := NewChain(ids...)
+		if err != nil {
+			return nil, err
+		}
+		// prior ids are version, namespace, table, chain
+		switch len(ids) {
+		case 4:
+			return iptables.NewRule(chain).RuleResource(), nil
+		default:
+			rule := iptables.NewRule(chain)
+			id, err := strconv.Atoi(ids[4])
+			if err != nil {
+				return iptables.Rule{}.RuleResource(), err
+			}
+			rule.Id = uint32(id)
+			return rule.RuleResource(), nil
+		}
+	},
+	T:       reflect.TypeOf(""),
+	Allowed: []Allowed{LIST_ALLOWED},
+}

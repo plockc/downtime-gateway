@@ -34,18 +34,18 @@ func PingCmd(target net.IPNet) string {
 
 func ClearIPTables(ns resource.NS, t *testing.T) {
 	gwRunner := gw.Runner()
-	var table = iptables.NewTable(ns, "")
+	var table = iptables.NewTable(ns, "filter")
 	if err := funcs.Do(
 		resource.NewLifecycle(
 			iptables.NewChainResource(iptables.NewChain(table, "")),
 		).Clear,
-		gwRunner.LineFunc(iptables.FLUSH.ChainCmd("FORWARD")),
-		gwRunner.LineFunc(iptables.FLUSH.ChainCmd("OUTPUT")),
-		gwRunner.LineFunc(iptables.FLUSH.ChainCmd("INPUT")),
+		gwRunner.BatchLinesFunc(iptables.FLUSH.ChainCmd("FORWARD")),
+		gwRunner.BatchLinesFunc(iptables.FLUSH.ChainCmd("OUTPUT")),
+		gwRunner.BatchLinesFunc(iptables.FLUSH.ChainCmd("INPUT")),
 	); err != nil {
-		fmt.Println(gwRunner)
+		t.Error(gwRunner)
 		_, iptables, _ := exec.ExecLine(gwRunner.WrapCmdLine("iptables -L -v"))
-		fmt.Println(iptables)
+		t.Error(iptables)
 		t.Fatalf("failed to clear IPTables: %v", err)
 	}
 }
@@ -53,7 +53,7 @@ func ClearIPTables(ns resource.NS, t *testing.T) {
 func ClearIPSets(ns resource.NS, t *testing.T, set ...string) {
 	gwRunner := gw.Runner()
 	for _, s := range set {
-		if err := gwRunner.Line("ipset destroy -exist " + s); err != nil {
+		if err := gwRunner.RunLine("ipset destroy -exist " + s); err != nil {
 			t.Fatalf("failed to clear ipsets: %v", err)
 		}
 	}
@@ -64,7 +64,7 @@ func TestAllow(t *testing.T) {
 	ClearIPTables(gw, t)
 	gwRunner := gw.Runner()
 	clientRunner := client.Runner()
-	if err := clientRunner.Line(PingCmd(serverIP)); err != nil {
+	if err := clientRunner.RunLine(PingCmd(serverIP)); err != nil {
 		fmt.Println(gwRunner)
 		fmt.Println(clientRunner)
 		_, iptables, _ := exec.ExecLine(gwRunner.WrapCmdLine("iptables -L -v"))
@@ -79,8 +79,8 @@ func TestRuleBlock(t *testing.T) {
 	gwRunner := gw.Runner()
 	clientRunner := client.Runner()
 	if err := funcs.Do(
-		gwRunner.LineFunc(iptables.APPEND.FilterRule("FORWARD", "-s 192.168.100.20", "DROP")),
-		clientRunner.LineFunc(PingCmd(serverIP)),
+		gwRunner.BatchLinesFunc(iptables.APPEND.FilterRule("FORWARD", "-s 192.168.100.20", "DROP")),
+		clientRunner.BatchLinesFunc(PingCmd(serverIP)),
 	); err == nil {
 		fmt.Println(gwRunner)
 		fmt.Println(clientRunner)
@@ -105,15 +105,19 @@ func TestBlockSet(t *testing.T) {
 		ipSetRes.Create,
 		ipSetMemberRes.Create,
 		funcs.AssignFunc(resource.NewLifecycle(chainRes).Ensure, &ignored),
-		gwRunner.LineFunc(iptables.APPEND.FilterRule(
+		gwRunner.BatchLinesFunc(iptables.APPEND.FilterRule(
 			iptables.DOWNTIME_CHAIN, ipSet.Match(), iptables.DROP),
 		),
-		funcs.ExpectFailFunc("ping server", clientRunner.LineFunc(PingCmd(serverIP))),
+		funcs.ExpectFailFunc("ping server", clientRunner.BatchLinesFunc(PingCmd(serverIP))),
 	); err != nil {
-		fmt.Println(gwRunner)
+		t.Error(gwRunner)
 		fmt.Println(clientRunner)
 		_, iptables, _ := exec.ExecLine(gwRunner.WrapCmdLine("iptables -L -v"))
-		fmt.Println(iptables)
+		t.Error(iptables)
+		_, ipsets, _ := exec.ExecLine(gwRunner.WrapCmdLine("ipset list"))
+		t.Error(ipsets)
+		_, ipaddrs, _ := exec.ExecLine(gwRunner.WrapCmdLine("ip a"))
+		t.Error(ipaddrs)
 		t.Fatal("failed to block")
 	}
 }
@@ -135,15 +139,15 @@ func TestAllowSet(t *testing.T) {
 		funcs.AssignFunc(ipSetLC.Ensure, &ignored),
 		funcs.AssignFunc(ipSetMemberLC.Ensure, &ignored),
 		funcs.AssignFunc(downtimeChainLC.Ensure, &ignored),
-		gwRunner.LineFunc(iptables.APPEND.FilterRule(
+		gwRunner.BatchLinesFunc(iptables.APPEND.FilterRule(
 			iptables.DOWNTIME_CHAIN, ipSet.Match(), iptables.RETURN),
 		),
-		clientRunner.LineFunc(PingCmd(serverIP)),
+		clientRunner.BatchLinesFunc(PingCmd(serverIP)),
 	); err != nil {
-		fmt.Println(gwRunner)
-		fmt.Println(clientRunner)
+		t.Error(gwRunner)
+		t.Error(clientRunner)
 		_, iptables, _ := exec.ExecLine(gwRunner.WrapCmdLine("iptables -L -v"))
-		fmt.Println(iptables)
+		t.Error(iptables)
 		t.Fatal("blocked")
 	}
 }
@@ -175,29 +179,29 @@ func TestMain(m *testing.M) {
 			// connect and configure wan interfaces in the 44.0.0.0/8 network
 			// the internal server normally has many routes but for this test
 			// just route to the test gateway for return traffic
-			gwRunner.LineFunc("ip link add wan type veth peer name wan-peer"),
-			gwRunner.LineFunc("ip link set wan-peer netns "+server.NSName()),
-			gwRunner.LineFunc("ip addr add "+gwWanIP.String()+" dev wan"),
-			gwRunner.LineFunc("ip link set dev wan up"),
+			gwRunner.BatchLinesFunc("ip link add wan type veth peer name wan-peer"),
+			gwRunner.BatchLinesFunc("ip link set wan-peer netns "+server.NSName()),
+			gwRunner.BatchLinesFunc("ip addr add "+gwWanIP.String()+" dev wan"),
+			gwRunner.BatchLinesFunc("ip link set dev wan up"),
 
-			serverRunner.LineFunc("ip addr add "+serverIP.String()+" dev wan-peer"),
-			serverRunner.LineFunc("ip link set dev wan-peer up"),
-			serverRunner.LineFunc("ip route add default via "+gwWanIP.IP.String()+" dev wan-peer"),
+			serverRunner.BatchLinesFunc("ip addr add "+serverIP.String()+" dev wan-peer"),
+			serverRunner.BatchLinesFunc("ip link set dev wan-peer up"),
+			serverRunner.BatchLinesFunc("ip route add default via "+gwWanIP.IP.String()+" dev wan-peer"),
 
-			serverRunner.LineFunc("ip addr"),
+			serverRunner.BatchLinesFunc("ip addr"),
 
 			// connect and configure lan interfaces on the 192.168.100/24 network
 			// internal client routes through gatway at 192.168.100.1
-			gwRunner.LineFunc("ip link add lan type veth peer name lan-peer"),
-			gwRunner.LineFunc("ip link set lan-peer netns "+client.NSName()),
-			gwRunner.LineFunc("ip addr add 192.168.100.1/24 dev lan"),
-			gwRunner.LineFunc("ip link set dev lan up"),
+			gwRunner.BatchLinesFunc("ip link add lan type veth peer name lan-peer"),
+			gwRunner.BatchLinesFunc("ip link set lan-peer netns "+client.NSName()),
+			gwRunner.BatchLinesFunc("ip addr add 192.168.100.1/24 dev lan"),
+			gwRunner.BatchLinesFunc("ip link set dev lan up"),
 
-			clientRunner.LineFunc("ip addr add 192.168.100.20/24 dev lan-peer"),
-			clientRunner.LineFunc("ip link set dev lan-peer up"),
-			clientRunner.LineFunc("ip route add default via 192.168.100.1 dev lan-peer"),
+			clientRunner.BatchLinesFunc("ip addr add 192.168.100.20/24 dev lan-peer"),
+			clientRunner.BatchLinesFunc("ip link set dev lan-peer up"),
+			clientRunner.BatchLinesFunc("ip route add default via 192.168.100.1 dev lan-peer"),
 
-			clientRunner.Func(address.NetInterface("lan-peer").IPAddrJsonCmd()),
+			clientRunner.BatchFunc(address.NetInterface("lan-peer").IPAddrJsonCmd()),
 
 			funcs.PipeFunc(clientRunner.LastOutFunc(), &clientMAC, funcs.Pipe(funcs.Pipe(
 				address.IPAddrsOutFromString,

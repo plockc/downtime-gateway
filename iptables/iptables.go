@@ -19,10 +19,10 @@ func (iptc IPRuleCmd) FilterRule(chain, match, target string) string {
 
 func EnsureIPRuleFunc(runner resource.Runner, chain, match, target string) func() error {
 	return func() error {
-		err := runner.Line(CHECK.FilterRule(chain, match, target))
+		err := runner.RunLine(CHECK.FilterRule(chain, match, target))
 		if err != nil {
 			return err
 		}
-		return runner.Line(APPEND.FilterRule(chain, match, target))
+		return runner.RunLine(APPEND.FilterRule(chain, match, target))
 	}
 }

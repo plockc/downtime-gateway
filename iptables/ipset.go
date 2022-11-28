@@ -39,21 +39,16 @@ func (ipSet IPSetRes) Id() string {
 }
 
 func (ipSet IPSetRes) Delete() error {
-	return ipSet.Runner().Line("ipset destroy " + ipSet.Id())
+	return ipSet.Runner().RunLine("ipset destroy " + ipSet.Id())
 }
 
 func (ipSet IPSetRes) Create() error {
-	return ipSet.Runner().Line(
-		"ipset -N "+ipSet.Id()+" hash:mac",
-		"ipset -N -exist "+ipSet.Id()+"-builder hash:mac",
-		"ipset swap "+ipSet.Id()+"-builder "+ipSet.Id(),
-		"ipset destroy "+ipSet.Id()+"-builder",
-	)
+	return ipSet.Runner().RunLine("ipset -N " + ipSet.Id() + " hash:mac")
 }
 
 func (ipSet IPSetRes) List() ([]string, error) {
 	runner := ipSet.Runner()
-	if err := runner.Line("ipset list -n"); err != nil {
+	if err := runner.RunLine("ipset list -n"); err != nil {
 		return nil, err
 	}
 	return strings.Split(runner.LastOut(), "\n"), nil

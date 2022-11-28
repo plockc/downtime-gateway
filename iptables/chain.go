@@ -44,11 +44,11 @@ func (chain ChainRes) Id() string {
 }
 
 func (chain ChainRes) Delete() error {
-	return chain.Runner().Line(DELETE_CHAIN.ChainCmd(chain.Id()))
+	return chain.Runner().RunLine(DELETE_CHAIN.ChainCmd(chain.Id()))
 }
 
 func (chain ChainRes) Create() error {
-	return chain.Runner().Line(NEW.ChainCmd(chain.Id()))
+	return chain.Runner().RunLine(NEW.ChainCmd(chain.Id()))
 }
 
 func (chain ChainRes) List() ([]string, error) {
@@ -71,5 +71,5 @@ func (chain ChainRes) List() ([]string, error) {
 }
 
 func (chain ChainRes) Clear() error {
-	return chain.Runner().Line("iptables -X")
+	return chain.Runner().RunLine("iptables -X")
 }

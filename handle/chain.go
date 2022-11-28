@@ -7,17 +7,27 @@ import (
 	"github.com/plockc/gateway/resource"
 )
 
+func NewChain(ids ...string) (iptables.Chain, error) {
+	table, err := NewTable(ids...)
+	if err != nil {
+		return iptables.Chain{}, err
+	}
+	switch len(ids) {
+	case 3:
+		return iptables.NewChain(table, ""), nil
+	default:
+		return iptables.NewChain(table, ids[3]), nil
+	}
+}
+
 var Chains = Resources{
 	Name: "IPTable Chain",
 	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
-		table, err := NewTable(ids...)
+		chain, err := NewChain(ids...)
 		if err != nil {
 			return nil, err
 		}
-		switch len(ids) {
-		default:
-			return iptables.NewChainResource(iptables.NewChain(table, ids[2])), nil
-		}
+		return chain.ChainResource(), nil
 	},
 	T:       reflect.TypeOf(""),
 	Allowed: []Allowed{LIST_ALLOWED},
