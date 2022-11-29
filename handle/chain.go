@@ -30,5 +30,5 @@ var Chains = Resources{
 		return chain.ChainResource(), nil
 	},
 	T:       reflect.TypeOf(""),
-	Allowed: []Allowed{LIST_ALLOWED},
+	Allowed: []Allowed{LIST_ALLOWED, DELETE_ALLOWED, GET_ALLOWED, UPSERT_ALLOWED},
 }

@@ -55,62 +55,6 @@ func (r Rule) String() string {
 	return r.Table.String() + ":rule[" + strings.Join(r.Args(), " ") + " ]"
 }
 
-func (r *Rule) Load(s string) error {
-	if !strings.HasPrefix(s, "-A "+r.Chain.Name+" ") {
-		return fmt.Errorf("didn't match append to chain, cannot load: %s", s)
-	}
-	ruleSpec := strings.Split(s, " ")
-	i := 2
-	for i < len(ruleSpec) {
-		switch ruleSpec[i] {
-		case "-m":
-			switch ruleSpec[i+1] {
-			case "set":
-				if ruleSpec[i+2] != "--match-set" {
-					return fmt.Errorf("failed to find match-set arg for -m set: %s", s)
-				}
-				if ruleSpec[i+4] != "src" {
-					return fmt.Errorf("only supporting src for match-set: %s", s)
-				}
-				r.MatchSetSrc = ruleSpec[i+3]
-				i += 5
-			case "comment":
-				if ruleSpec[i+2] != "--comment" {
-					return fmt.Errorf("failed to find comment arg for -m comment: %s", s)
-				}
-				i += 3
-				commentParts := []string{}
-				for {
-					if !strings.HasSuffix(ruleSpec[i], `"`) {
-						commentParts = append(commentParts, ruleSpec[i])
-						i++
-					} else {
-						commentParts = append(commentParts, ruleSpec[i])
-						i++
-						break
-					}
-				}
-				commentMatch := RuleIdRegex.FindStringSubmatch(strings.Trim(strings.Join(commentParts, " "), `"`))
-				if len(commentMatch) != 3 {
-					return fmt.Errorf("failed to process Id from comment: %v", commentParts)
-				}
-				rId, err := strconv.ParseUint(commentMatch[1], 16, 32)
-				if err != nil {
-					return err
-				}
-				r.Id = uint32(rId)
-				r.Comment = commentMatch[2]
-			}
-		case "-j":
-			r.Target = ruleSpec[i+1]
-			i += 2
-		default:
-			return fmt.Errorf("failed to parse at index %d: %s", i, ruleSpec[i])
-		}
-	}
-	return nil
-}
-
 var _ resource.Resource = RuleRes{}
 
 type RuleRes struct {
@@ -147,22 +91,98 @@ func (r RuleRes) List() ([]string, error) {
 }
 
 func (r RuleRes) Clear() error {
-	res, err := r.Runner().Exec([]string{"iptables-save", "-t", r.Table.Name})
+	ruleIds, err := r.List()
 	if err != nil {
 		return err
 	}
-	// remove rules not in the chain or not managed by this program
-	ruleSpecs := funcs.Keep(strings.Split(res.Out, "\n"), func(s string) bool {
-		return strings.HasPrefix(s, "-A "+r.Chain.Name+" ")
-	})
-	for _, spec := range ruleSpecs {
-		err := r.Rule.Load(spec)
+	for _, ruleId := range ruleIds {
+		r.Rule.Id, err = ParseRuleId(ruleId)
+		if err != nil {
+			return err
+		}
+		err = r.Load()
 		if err != nil {
 			return err
 		}
 		err = r.Delete()
 		if err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func ParseRuleId(s string) (uint32, error) {
+	rId, err := strconv.ParseUint(s, 16, 32)
+	if err != nil {
+		return 0, err
+	}
+	return uint32(rId), nil
+}
+
+func (r *RuleRes) Load() error {
+	res, err := r.Runner().Exec([]string{"iptables-save", "-t", r.Table.Name})
+	if err != nil {
+		return err
+	}
+	// remove rules not in the chain or not managed by this program
+	rules := funcs.Keep(strings.Split(res.Out, "\n"), func(s string) bool {
+		if !strings.HasPrefix(s, "-A "+r.Chain.Name+" ") {
+			return false
+		}
+		matches := RuleIdRegex.FindStringSubmatch(s)
+		return len(matches) >= 2
+	})
+	if len(rules) < 1 {
+		return fmt.Errorf("expected a matching rule, got %v", rules)
+	}
+
+	ruleSpec := strings.Split(rules[0], " ")
+	i := 2
+	for i < len(ruleSpec) {
+		switch ruleSpec[i] {
+		case "-m":
+			switch ruleSpec[i+1] {
+			case "set":
+				if ruleSpec[i+2] != "--match-set" {
+					return fmt.Errorf("failed to find match-set arg for -m set: %s", ruleSpec)
+				}
+				if ruleSpec[i+4] != "src" {
+					return fmt.Errorf("only supporting src for match-set: %s", ruleSpec)
+				}
+				r.MatchSetSrc = ruleSpec[i+3]
+				i += 5
+			case "comment":
+				if ruleSpec[i+2] != "--comment" {
+					return fmt.Errorf("failed to find comment arg for -m comment: %s", ruleSpec)
+				}
+				i += 3
+				commentParts := []string{}
+				for {
+					if !strings.HasSuffix(ruleSpec[i], `"`) {
+						commentParts = append(commentParts, ruleSpec[i])
+						i++
+					} else {
+						commentParts = append(commentParts, ruleSpec[i])
+						i++
+						break
+					}
+				}
+				commentMatch := RuleIdRegex.FindStringSubmatch(strings.Trim(strings.Join(commentParts, " "), `"`))
+				if len(commentMatch) != 3 {
+					return fmt.Errorf("failed to process Id from comment: %v", commentParts)
+				}
+				r.Rule.Id, err = ParseRuleId(commentMatch[1])
+				if err != nil {
+					return err
+				}
+				r.Comment = commentMatch[2]
+			}
+		case "-j":
+			r.Target = ruleSpec[i+1]
+			i += 2
+		default:
+			return fmt.Errorf("failed to parse at index %d: %s", i, ruleSpec[i])
 		}
 	}
 	return nil

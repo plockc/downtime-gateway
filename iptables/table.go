@@ -21,6 +21,10 @@ func NewTable(ns resource.NS, name string) Table {
 	return Table{Name: name, NS: ns}
 }
 
+func (t Table) TableResource() TableRes {
+	return NewTableResource(t)
+}
+
 type TableRes struct {
 	Table
 	resource.FailUnimplementedMethods

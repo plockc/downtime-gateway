@@ -1,7 +1,6 @@
 package iptables_test
 
 import (
-	"fmt"
 	"reflect"
 	"testing"
 
@@ -9,31 +8,6 @@ import (
 	"github.com/plockc/gateway/funcs"
 	"github.com/plockc/gateway/iptables"
 )
-
-func TestRuleLoad(t *testing.T) {
-	table := iptables.FilterTable(testNS)
-	chain := iptables.NewChain(table, "tchain")
-	r := iptables.NewRule(chain)
-	err := r.Load(
-		fmt.Sprintf(
-			`-A tchain -m set --match-set test src -m comment --comment "gw-dt[%0.8x]: Howdy bob" -j DROP`,
-			1,
-		),
-	)
-	if err != nil {
-		t.Fatal(err)
-	}
-	expectedRule := iptables.Rule{
-		Id:          1,
-		Comment:     "Howdy bob",
-		MatchSetSrc: "test",
-		Target:      "DROP",
-		Chain:       chain,
-	}
-	if !reflect.DeepEqual(expectedRule, r) {
-		t.Fatalf("did not match expected: %#v", r)
-	}
-}
 
 func TestRuleResource(t *testing.T) {
 	table := iptables.FilterTable(testNS)
