@@ -1,7 +1,6 @@
 package handle
 
 import (
-	"reflect"
 	"strconv"
 
 	"github.com/plockc/gateway/iptables"
@@ -29,6 +28,5 @@ var Rules = Resources{
 			return rule.RuleResource(), nil
 		}
 	},
-	T:       reflect.TypeOf(""),
 	Allowed: []Allowed{LIST_ALLOWED, UPSERT_ALLOWED, GET_ALLOWED, DELETE_ALLOWED},
 }

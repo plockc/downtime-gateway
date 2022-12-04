@@ -2,7 +2,6 @@ package handle
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/plockc/gateway/iptables"
 	"github.com/plockc/gateway/resource"
@@ -28,7 +27,6 @@ var Tables = Resources{
 		}
 		return iptables.NewTableResource(table), nil
 	},
-	T: reflect.TypeOf(""),
 	Relationships: map[string]Resources{
 		"chains": Chains,
 	},

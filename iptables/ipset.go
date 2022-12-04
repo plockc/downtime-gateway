@@ -17,10 +17,6 @@ func NewIPSet(ns resource.NS, name string) IPSet {
 	return IPSet{Name: name, NS: ns}
 }
 
-func (ipSet IPSet) Match() string {
-	return "-m set --match-set " + ipSet.Name + " src"
-}
-
 func (ipSet IPSet) String() string {
 	return ipSet.NS.String() + ":ipSet[" + ipSet.Name + "]"
 }

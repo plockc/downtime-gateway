@@ -2,7 +2,6 @@ package handle
 
 import (
 	"fmt"
-	"reflect"
 
 	"github.com/plockc/gateway/address"
 	"github.com/plockc/gateway/iptables"
@@ -29,7 +28,6 @@ var IPSets = Resources{
 		}
 		return ipSet.IPSetResource(), nil
 	},
-	T: reflect.TypeOf(address.MAC{}),
 	Relationships: map[string]Resources{
 		"members": IPSetMembers,
 	},
@@ -53,6 +51,5 @@ var IPSetMembers = Resources{
 			return iptables.NewMember(ipSet, mac).MemberResource(), err
 		}
 	},
-	T:       nil,
 	Allowed: []Allowed{GET_ALLOWED, LIST_ALLOWED, DELETE_ALLOWED, UPSERT_ALLOWED},
 }

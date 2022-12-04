@@ -1,8 +1,6 @@
 package handle
 
 import (
-	"reflect"
-
 	"github.com/plockc/gateway/resource"
 )
 
@@ -16,7 +14,6 @@ var Namespaces = Resources{
 			return resource.NewNS(ids[0]).NSResource(), nil
 		}
 	},
-	T: reflect.TypeOf([]string{}),
 	Relationships: map[string]Resources{
 		"iptables": Tables,
 		"ipsets":   IPSets,

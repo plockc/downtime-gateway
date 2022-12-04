@@ -92,23 +92,34 @@ func TestRuleBlock(t *testing.T) {
 }
 
 // test if we can block a set
-func TestBlockSet(t *testing.T) {
+func TestSetBlock(t *testing.T) {
 	ClearIPTables(gw, t)
 	gwRunner := gw.Runner()
 	clientRunner := client.Runner()
-	ipSet := iptables.NewIPSet(gw, "test")
+	var ipSet iptables.IPSet = iptables.NewIPSet(gw, "test")
+	ClearIPSets(gw, t, ipSet.Name)
 	ipSetRes := ipSet.IPSetResource()
 	ipSetMemberRes := iptables.NewMember(ipSet, clientMAC).MemberResource()
 	table := iptables.FilterTable(gw)
-	chainRes := iptables.NewChain(table, iptables.DOWNTIME_CHAIN).ChainResource()
-	var ignored bool
+	chain := iptables.NewChain(table, iptables.DOWNTIME_CHAIN)
+	chainRes := chain.ChainResource()
+	jumpToChainRule := iptables.NewRule(iptables.NewChain(table, "FORWARD"))
+	jumpToChainRule.Target = chain.Name
+	rule := iptables.NewRule(chain)
+	rule.Target = "DROP"
+	rule.MatchSetSrc = ipSet.Name
+	ruleRes := rule.RuleResource()
+	defer resource.NewLifecycle(ruleRes).EnsureDeleted()
+	defer resource.NewLifecycle(jumpToChainRule.RuleResource()).EnsureDeleted()
+	defer resource.NewLifecycle(chainRes).EnsureDeleted()
+	defer resource.NewLifecycle(ipSetMemberRes).EnsureDeleted()
+	defer resource.NewLifecycle(ipSetRes).EnsureDeleted()
 	if err := funcs.Do(
 		ipSetRes.Create,
 		ipSetMemberRes.Create,
-		funcs.AssignFunc(resource.NewLifecycle(chainRes).Ensure, &ignored),
-		gwRunner.BatchLinesFunc(iptables.APPEND.FilterRule(
-			iptables.DOWNTIME_CHAIN, ipSet.Match(), iptables.DROP),
-		),
+		chainRes.Create,
+		jumpToChainRule.RuleResource().Create,
+		ruleRes.Create,
 		funcs.ExpectFailFunc("ping server", clientRunner.BatchLinesFunc(PingCmd(serverIP))),
 	); err != nil {
 		t.Error(gwRunner)
@@ -119,37 +130,51 @@ func TestBlockSet(t *testing.T) {
 		t.Error(ipsets)
 		_, ipaddrs, _ := exec.ExecLine(gwRunner.WrapCmdLine("ip a"))
 		t.Error(ipaddrs)
-		t.Fatal("failed to block")
+		t.Fatal(err)
 	}
 }
 
 // test if we can allow a set
-func TestAllowSet(t *testing.T) {
+func TestSetAllow(t *testing.T) {
 	ClearIPTables(gw, t)
 	gwRunner := gw.Runner()
 	clientRunner := client.Runner()
 	ipSet := iptables.NewIPSet(gw, "test")
-	ipSetLC := resource.Lifecycle{Resource: ipSet.IPSetResource()}
-	ipSetMember := iptables.NewMember(ipSet, clientMAC)
-	ipSetMemberLC := resource.Lifecycle{Resource: ipSetMember.MemberResource()}
-	downtimeChainLC := resource.NewLifecycle(
-		iptables.NewChain(iptables.FilterTable(gw), iptables.DOWNTIME_CHAIN).ChainResource(),
-	)
-	var ignored bool
+	ClearIPSets(gw, t, ipSet.Name)
+	ipSetRes := ipSet.IPSetResource()
+	ipSetMemberRes := iptables.NewMember(ipSet, clientMAC).MemberResource()
+	t.Log("Member:", ipSetMemberRes)
+	table := iptables.FilterTable(gw)
+	chain := iptables.NewChain(table, iptables.DOWNTIME_CHAIN)
+	chainRes := chain.ChainResource()
+	jumpToChainRule := iptables.NewRule(iptables.NewChain(table, "FORWARD"))
+	jumpToChainRule.Target = chain.Name
+	rule := iptables.NewRule(chain)
+	rule.Target = "RETURN"
+	rule.MatchSetSrc = ipSet.Name
+	ruleRes := rule.RuleResource()
+	defer resource.NewLifecycle(ruleRes).EnsureDeleted()
+	defer resource.NewLifecycle(jumpToChainRule.RuleResource()).EnsureDeleted()
+	defer resource.NewLifecycle(chainRes).EnsureDeleted()
+	defer resource.NewLifecycle(ipSetMemberRes).EnsureDeleted()
+	defer resource.NewLifecycle(ipSetRes).EnsureDeleted()
 	if err := funcs.Do(
-		funcs.AssignFunc(ipSetLC.Ensure, &ignored),
-		funcs.AssignFunc(ipSetMemberLC.Ensure, &ignored),
-		funcs.AssignFunc(downtimeChainLC.Ensure, &ignored),
-		gwRunner.BatchLinesFunc(iptables.APPEND.FilterRule(
-			iptables.DOWNTIME_CHAIN, ipSet.Match(), iptables.RETURN),
-		),
+		ipSetRes.Create,
+		ipSetMemberRes.Create,
+		chainRes.Create,
+		jumpToChainRule.RuleResource().Create,
+		ruleRes.Create,
 		clientRunner.BatchLinesFunc(PingCmd(serverIP)),
 	); err != nil {
 		t.Error(gwRunner)
-		t.Error(clientRunner)
+		t.Log(clientRunner)
 		_, iptables, _ := exec.ExecLine(gwRunner.WrapCmdLine("iptables -L -v"))
 		t.Error(iptables)
-		t.Fatal("blocked")
+		_, ipsets, _ := exec.ExecLine(gwRunner.WrapCmdLine("ipset list"))
+		t.Error(ipsets)
+		_, ipaddrs, _ := exec.ExecLine(gwRunner.WrapCmdLine("ip a"))
+		t.Error(ipaddrs)
+		t.Fatal(err)
 	}
 }
 

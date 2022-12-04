@@ -1,8 +1,6 @@
 package handle
 
 import (
-	"reflect"
-
 	"github.com/plockc/gateway/iptables"
 	"github.com/plockc/gateway/resource"
 )
@@ -32,6 +30,5 @@ var Chains = Resources{
 	Relationships: map[string]Resources{
 		"rules": Rules,
 	},
-	T:       reflect.TypeOf(""),
 	Allowed: []Allowed{LIST_ALLOWED, DELETE_ALLOWED, GET_ALLOWED, UPSERT_ALLOWED},
 }

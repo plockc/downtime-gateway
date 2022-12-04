@@ -19,7 +19,6 @@ var Versions = Resources{
 			return Version{Name: ids[0]}, nil
 		}
 	},
-	T: nil,
 	Relationships: map[string]Resources{
 		"netns": Namespaces,
 	},
