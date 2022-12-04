@@ -2,6 +2,7 @@ package handle
 
 import (
 	"fmt"
+	"io"
 	"net/http"
 	"strings"
 
@@ -96,8 +97,41 @@ func (api Api) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				} else {
 					jsonResponse(w, path, 200, nil)
 				}
+			// handle a PUT request for a new resource - e.g. PUT /api/v1/ns/test/ipsets/tvs
+			case http.MethodPut:
+				if !slices.Contains(handler.Allowed, UPSERT_ALLOWED) {
+					errorResponse(w, path, http.StatusMethodNotAllowed, fmt.Errorf(
+						"method '%v' is not allowed for %s", req.Method, handler.Name,
+					))
+					return
+				}
+				defer req.Body.Close()
+				body, err := io.ReadAll(req.Body)
+				if err != nil {
+					errorResponse(w, path, http.StatusInternalServerError, fmt.Errorf(
+						"failed to read Body: %w", err,
+					))
+					return
+				}
+				// NOTE: the FooResource() function must return a pointer to a Resource
+				if err = UpdateFromJson(body, res); err != nil {
+					errorResponse(w, path, http.StatusInternalServerError, fmt.Errorf(
+						"failed to process body, make sure it is valid JSON: %w", err,
+					))
+					return
+				}
+				_, err = lc.Ensure()
+				if err != nil {
+					errorResponse(w, path, http.StatusInternalServerError, fmt.Errorf(
+						"failed to PUT: %w", err,
+					))
+					return
+				}
+				locationResponse(w, path, 201, req.URL.JoinPath("./"+res.Id()).Path)
 			default:
-				errorResponse(w, path, http.StatusMethodNotAllowed, err)
+				errorResponse(w, path, http.StatusMethodNotAllowed, fmt.Errorf(
+					"unsupported Method: '%s'", req.Method,
+				))
 			}
 		// case: has ID for the requested resource
 		// e.g. /api/v1/ns/test
@@ -128,8 +162,14 @@ func (api Api) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 					))
 					return
 				}
+				if loader, ok := res.(resource.Loader); ok {
+					if err := loader.Load(); err != nil {
+						errorResponse(w, path, 404, err)
+						return
+					}
+				}
 				if exists {
-					jsonResponse(w, path, 200, nil)
+					jsonResponse(w, path, 200, res)
 				} else {
 					errorResponse(w, path, 404, fmt.Errorf("missing %s", path))
 				}
@@ -153,7 +193,7 @@ func (api Api) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 				} else {
 					jsonResponse(w, path, 200, nil)
 				}
-			// handle a PUT request for a new resource - e.g. PUT /api/v1/ns/test/ipsets/tvs
+			// handle a PUT request for a resource - e.g. PUT /api/v1/ns/test/ipsets/tvs/bedroom
 			case http.MethodPut:
 				if !slices.Contains(handler.Allowed, UPSERT_ALLOWED) {
 					errorResponse(w, path, http.StatusMethodNotAllowed, fmt.Errorf(

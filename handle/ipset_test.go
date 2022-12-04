@@ -28,28 +28,28 @@ func TestIPSetHandlers(t *testing.T) {
 	t.Run("creating set", func(t *testing.T) {
 		data := AssertHandler[any](t, http.MethodPut, "/api/v1/netns/test/ipsets/test", nil, 201)
 		if data != nil {
-			t.Fatalf("did not expect body on create: %#v", data)
+			t.Fatalf("did not expect body on create: %#v", *data)
 		}
 	})
 
 	t.Run("creating same set again", func(t *testing.T) {
 		data := AssertHandler[any](t, http.MethodPut, "/api/v1/netns/test/ipsets/test", nil, 200)
 		if data != nil {
-			t.Fatalf("did not expect body on create: %#v", data)
+			t.Fatalf("did not expect body on create: %#v", *data)
 		}
 	})
 
 	t.Run("check existence of set using GET on set name", func(t *testing.T) {
 		data := AssertHandler[any](t, http.MethodGet, "/api/v1/netns/test/ipsets/test", nil, 200)
 		if data != nil {
-			t.Fatalf("did not expect body: %#v", data)
+			t.Fatalf("did not expect body: %#v", *data)
 		}
 	})
 
 	t.Run("check members of empty set", func(t *testing.T) {
 		data := AssertHandler[[]string](t, http.MethodGet, "/api/v1/netns/test/ipsets/test/members", nil, 200)
 		if len(*data) != 0 {
-			t.Fatalf("MACs returned: %v", data)
+			t.Fatalf("MACs returned: %v", *data)
 		}
 	})
 
@@ -59,7 +59,7 @@ func TestIPSetHandlers(t *testing.T) {
 				t, http.MethodPut, "/api/v1/netns/test/ipsets/test/members/12:12:12:12:12:12", nil, 201,
 			)
 			if data != nil {
-				t.Fatalf("did not expect body: %#v", data)
+				t.Fatalf("did not expect body: %#v", *data)
 			}
 		})
 		t.Run("add existing member again", func(t *testing.T) {
@@ -67,7 +67,7 @@ func TestIPSetHandlers(t *testing.T) {
 				t, http.MethodPut, "/api/v1/netns/test/ipsets/test/members/12:12:12:12:12:12", nil, 200,
 			)
 			if data != nil {
-				t.Fatalf("did not expect body: %#v", data)
+				t.Fatalf("did not expect body: %#v", *data)
 			}
 		})
 		t.Run("add second member", func(t *testing.T) {
@@ -75,7 +75,7 @@ func TestIPSetHandlers(t *testing.T) {
 				t, http.MethodPut, "/api/v1/netns/test/ipsets/test/members/12:12:12:12:12:34", nil, 201,
 			)
 			if data != nil {
-				t.Fatalf("did not expect body: %#v", data)
+				t.Fatalf("did not expect body: %#v", *data)
 			}
 		})
 	}
@@ -86,7 +86,7 @@ func TestIPSetHandlers(t *testing.T) {
 			t, http.MethodGet, "/api/v1/netns/test/ipsets/test/members/12:12:12:12:12:12", nil, 200,
 		)
 		if data != nil {
-			t.Fatalf("did not expect body: %#v", data)
+			t.Fatalf("did not expect body: %#v", *data)
 		}
 	})
 
@@ -98,7 +98,7 @@ func TestIPSetHandlers(t *testing.T) {
 			t, http.MethodGet, "/api/v1/netns/test/ipsets/test/members", nil, 200,
 		)
 		if !slices.Contains(*data, mac) || !slices.Contains(*data, mac2) {
-			t.Fatalf("did not get expected MACs: %v", data)
+			t.Fatalf("did not get expected MACs: %v", *data)
 		}
 	})
 
@@ -107,7 +107,7 @@ func TestIPSetHandlers(t *testing.T) {
 			t, http.MethodDelete, "/api/v1/netns/test/ipsets/test/members/12:12:12:12:12:12", nil, 204,
 		)
 		if data != nil {
-			t.Fatalf("did not expect body: %#v", data)
+			t.Fatalf("did not expect body: %#v", *data)
 		}
 	})
 
@@ -121,7 +121,7 @@ func TestIPSetHandlers(t *testing.T) {
 	})
 
 	t.Run("get remaining member", func(t *testing.T) {
-		data := AssertHandler[[]string](
+		data := AssertHandler[any](
 			t, http.MethodGet, "/api/v1/netns/test/ipsets/test/members/12:12:12:12:12:34", nil, 200,
 		)
 		if data != nil {
@@ -143,7 +143,7 @@ func TestIPSetHandlers(t *testing.T) {
 			t, http.MethodGet, "/api/v1/netns/test/ipsets/test/members", nil, 200,
 		)
 		if !reflect.DeepEqual(data, &[]string{}) {
-			t.Fatalf("did not get empty list of MACs: %v", data)
+			t.Fatalf("did not get empty list of MACs: %v", *data)
 		}
 	})
 
@@ -154,7 +154,7 @@ func TestIPSetHandlers(t *testing.T) {
 			t, http.MethodDelete, "/api/v1/netns/test/ipsets/test/members", nil, 204,
 		)
 		if data != nil {
-			t.Fatalf("did not expect body: %#v", data)
+			t.Fatalf("did not expect body: %#v", *data)
 		}
 	})
 
@@ -163,7 +163,7 @@ func TestIPSetHandlers(t *testing.T) {
 			t, http.MethodGet, "/api/v1/netns/test/ipsets/test/members", nil, 200,
 		)
 		if !reflect.DeepEqual(data, &[]string{}) {
-			t.Fatalf("did not get empty list of MACs: %v", data)
+			t.Fatalf("did not get empty list of MACs: %v", *data)
 		}
 	})
 
@@ -172,7 +172,7 @@ func TestIPSetHandlers(t *testing.T) {
 			t, http.MethodDelete, "/api/v1/netns/test/ipsets/test/members", nil, 200,
 		)
 		if data != nil {
-			t.Fatalf("did not expect body: %#v", data)
+			t.Fatalf("did not expect body: %#v", *data)
 		}
 	})
 }

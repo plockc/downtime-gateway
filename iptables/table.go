@@ -9,8 +9,8 @@ import (
 var _ resource.Resource = TableRes{}
 
 type Table struct {
-	Name string
-	resource.NS
+	Name        string `json:"-"`
+	resource.NS `json:"-"`
 }
 
 func FilterTable(ns resource.NS) Table {

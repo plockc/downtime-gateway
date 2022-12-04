@@ -47,10 +47,10 @@ var IPSetMembers = Resources{
 		case 2:
 			return nil, fmt.Errorf("missing ipset name")
 		case 3:
-			return iptables.NewMemberResource(iptables.NewMember(ipSet, address.MAC{})), nil
+			return iptables.NewMember(ipSet, address.MAC{}).MemberResource(), nil
 		default:
 			mac, err := address.MACFromString(ids[3])
-			return iptables.NewMemberResource(iptables.NewMember(ipSet, mac)), err
+			return iptables.NewMember(ipSet, mac).MemberResource(), err
 		}
 	},
 	T:       nil,

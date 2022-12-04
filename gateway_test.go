@@ -35,9 +35,10 @@ func PingCmd(target net.IPNet) string {
 func ClearIPTables(ns resource.NS, t *testing.T) {
 	gwRunner := gw.Runner()
 	var table = iptables.NewTable(ns, "filter")
+	chain := iptables.NewChain(table, "")
 	if err := funcs.Do(
 		resource.NewLifecycle(
-			iptables.NewChainResource(iptables.NewChain(table, "")),
+			chain.ChainResource(),
 		).Clear,
 		gwRunner.BatchLinesFunc(iptables.FLUSH.ChainCmd("FORWARD")),
 		gwRunner.BatchLinesFunc(iptables.FLUSH.ChainCmd("OUTPUT")),

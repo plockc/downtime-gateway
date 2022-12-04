@@ -17,7 +17,7 @@ func TestChainResource(t *testing.T) {
 		}
 		return chains
 	}
-	chainRes := iptables.NewChainResource(chain)
+	chainRes := chain.ChainResource()
 
 	// ensure list starts empty
 	err := chainRes.Clear()
@@ -65,7 +65,7 @@ func TestChainResource(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	err = iptables.NewChainResource(chain2).Create()
+	err = chain2.ChainResource().Create()
 	if err != nil {
 		t.Fatal(err)
 	}

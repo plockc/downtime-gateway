@@ -12,7 +12,7 @@ import (
 func TestRuleResource(t *testing.T) {
 	table := iptables.FilterTable(testNS)
 	chain := iptables.NewChain(table, "tchain")
-	chainRes := iptables.NewChainResource(chain)
+	chainRes := chain.ChainResource()
 	ruleLister := iptables.NewRule(chain).RuleResource()
 	ipSet := iptables.NewIPSet(testNS, "testSet")
 	mac, err := address.MACFromString("12:12:12:12:12:12")

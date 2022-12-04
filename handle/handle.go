@@ -17,12 +17,9 @@ func Serve() {
 	log.Fatal(http.ListenAndServe(":8000", nil))
 }
 
-func FromJson[T any](body []byte, target *T) error {
+func UpdateFromJson(body []byte, target any) error {
 	if len(body) > 0 {
-		err := json.Unmarshal(body, target)
-		if err != nil {
-			return fmt.Errorf("must be json: %w", err)
-		}
+		return json.Unmarshal(body, target)
 	}
 	return nil
 }

@@ -7,8 +7,8 @@ import (
 )
 
 type IPSet struct {
-	Name string
-	resource.NS
+	Name        string `json:"-"`
+	resource.NS `json:"-"`
 }
 
 var _ resource.Resource = IPSetRes{}
@@ -25,8 +25,8 @@ func (ipSet IPSet) String() string {
 	return ipSet.NS.String() + ":ipSet[" + ipSet.Name + "]"
 }
 
-func (ipSet IPSet) IPSetResource() IPSetRes {
-	return IPSetRes{IPSet: ipSet}
+func (ipSet IPSet) IPSetResource() *IPSetRes {
+	return &IPSetRes{IPSet: ipSet}
 }
 
 type IPSetRes struct {

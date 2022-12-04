@@ -10,7 +10,7 @@ import (
 
 var Rules = Resources{
 	Name: "IPTables Rules",
-	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
+	Factory: func(body []byte, ids ...string) (resource.Resource, error) {
 		chain, err := NewChain(ids...)
 		if err != nil {
 			return nil, err
@@ -21,7 +21,7 @@ var Rules = Resources{
 			return iptables.NewRule(chain).RuleResource(), nil
 		default:
 			rule := iptables.NewRule(chain)
-			id, err := strconv.Atoi(ids[4])
+			id, err := strconv.ParseUint(ids[4], 16, 32)
 			if err != nil {
 				return iptables.Rule{}.RuleResource(), err
 			}
@@ -30,5 +30,5 @@ var Rules = Resources{
 		}
 	},
 	T:       reflect.TypeOf(""),
-	Allowed: []Allowed{LIST_ALLOWED},
+	Allowed: []Allowed{LIST_ALLOWED, UPSERT_ALLOWED, GET_ALLOWED, DELETE_ALLOWED},
 }

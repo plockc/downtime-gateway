@@ -12,7 +12,7 @@ import (
 var chainRegex = regexp.MustCompile(`\w+ (\w+) .*`)
 
 type Chain struct {
-	Name  string
+	Name  string `json:"-"`
 	Table `json:"-"`
 }
 
@@ -20,8 +20,8 @@ func NewChain(table Table, name string) Chain {
 	return Chain{Name: name, Table: table}
 }
 
-func (c Chain) ChainResource() ChainRes {
-	return ChainRes{Chain: c}
+func (c Chain) ChainResource() *ChainRes {
+	return &ChainRes{Chain: c}
 }
 
 func (c Chain) String() string {
@@ -33,10 +33,6 @@ var _ resource.Resource = ChainRes{}
 type ChainRes struct {
 	resource.FailUnimplementedMethods
 	Chain
-}
-
-func NewChainResource(c Chain) ChainRes {
-	return ChainRes{Chain: c}
 }
 
 func (chain ChainRes) Id() string {

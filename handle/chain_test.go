@@ -34,9 +34,9 @@ func TestChainHandlers(t *testing.T) {
 	})
 
 	t.Run("check existence of chain using GET on chain name", func(t *testing.T) {
-		data := AssertHandler[any](t, http.MethodGet, "/api/v1/netns/test/iptables/filter/chains/testChain", nil, 200)
+		data := AssertHandler[iptables.Chain](t, http.MethodGet, "/api/v1/netns/test/iptables/filter/chains/testChain", nil, 200)
 		if data != nil {
-			t.Fatalf("did not expect body: %#v", data)
+			t.Fatalf("did not expect body: %#v", *data)
 		}
 	})
 

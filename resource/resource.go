@@ -16,6 +16,10 @@ type Resource interface {
 	Clear() error
 }
 
+type Loader interface {
+	Load() error
+}
+
 type Lifecycle struct {
 	Resource
 }

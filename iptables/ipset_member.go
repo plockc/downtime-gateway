@@ -10,16 +10,16 @@ import (
 )
 
 type Member struct {
-	address.MAC
-	IPSet
+	address.MAC `json:"-"`
+	IPSet       `json:"-"`
 }
 
 func (member Member) String() string {
-	return member.IPSet.String() + ":member[" + member.Name + "]"
+	return member.IPSet.String() + ":member[" + member.MAC.String() + "]"
 }
 
-func (m Member) MemberResource() MemberRes {
-	return MemberRes{Member: m}
+func (m Member) MemberResource() *MemberRes {
+	return &MemberRes{Member: m}
 }
 
 func NewMember(ipSet IPSet, mac address.MAC) Member {
@@ -29,12 +29,8 @@ func NewMember(ipSet IPSet, mac address.MAC) Member {
 var _ resource.Resource = &MemberRes{}
 
 type MemberRes struct {
-	Member
+	Member `json:",inline"`
 	resource.FailUnimplementedMethods
-}
-
-func NewMemberResource(m Member) MemberRes {
-	return MemberRes{Member: m}
 }
 
 func (m MemberRes) Id() string {

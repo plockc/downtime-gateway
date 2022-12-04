@@ -29,6 +29,9 @@ var Chains = Resources{
 		}
 		return chain.ChainResource(), nil
 	},
+	Relationships: map[string]Resources{
+		"rules": Rules,
+	},
 	T:       reflect.TypeOf(""),
 	Allowed: []Allowed{LIST_ALLOWED, DELETE_ALLOWED, GET_ALLOWED, UPSERT_ALLOWED},
 }

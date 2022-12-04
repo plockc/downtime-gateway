@@ -15,7 +15,7 @@ import (
 var RuleIdRegex = regexp.MustCompile(`.*gw-dt\[([0-9a-f]+)]: (.*)`)
 
 type Rule struct {
-	Id          uint32 `json:"-"`
+	Id          uint32
 	Chain       `json:"-"`
 	Target      string     `json:"target"`
 	Start       *time.Time `json:"start"`
@@ -32,27 +32,33 @@ func NewRule(c Chain) Rule {
 	}
 }
 
-func (r Rule) RuleResource() RuleRes {
-	return RuleRes{Rule: r}
+func (r Rule) RuleId() string {
+	return fmt.Sprintf("%x", r.Id)
+}
+
+func (r Rule) RuleResource() *RuleRes {
+	return &RuleRes{Rule: r}
 }
 
 // TODO: sanitize the comment
 func (r Rule) CoreArgs() []string {
-	args := []string{r.Chain.Name, "-t", r.Table.Name}
-	match := []string{}
-	if len(r.MatchSetSrc) > 0 {
-		match = append(match, []string{"-m", "set", "--match-set", r.MatchSetSrc, "src"}...)
-	}
-	return append(args, match...)
+	return []string{r.Chain.Name, "-t", r.Table.Name}
 }
 
 func (r Rule) Args() []string {
-	comment := []string{"-m", "comment", "--comment", fmt.Sprintf("gw-dt[%0.8x]: %s", r.Id, r.Comment)}
-	return append(r.CoreArgs(), append(comment, "-j", r.Target)...)
+	args := []string{}
+	if len(r.MatchSetSrc) > 0 {
+		args = append(args, []string{"-m", "set", "--match-set", r.MatchSetSrc, "src"}...)
+	}
+	args = append(
+		args, []string{
+			"-m", "comment", "--comment", fmt.Sprintf("gw-dt[%s]: %s", r.RuleId(), r.Comment)}...,
+	)
+	return append(r.CoreArgs(), append(args, "-j", r.Target)...)
 }
 
 func (r Rule) String() string {
-	return r.Table.String() + ":rule[" + strings.Join(r.Args(), " ") + " ]"
+	return r.Table.String() + ":rule[" + strings.Join(r.Args(), " ") + "]"
 }
 
 var _ resource.Resource = RuleRes{}
@@ -63,7 +69,7 @@ type RuleRes struct {
 }
 
 func (r RuleRes) Id() string {
-	return fmt.Sprintf("%0.8x", r.Rule.Id)
+	return fmt.Sprintf("%x", r.Rule.Id)
 }
 
 func (r RuleRes) Create() error {
@@ -71,6 +77,10 @@ func (r RuleRes) Create() error {
 }
 
 func (r RuleRes) Delete() error {
+	err := r.Load()
+	if err != nil {
+		return err
+	}
 	return r.Runner().Batch(append([]string{"iptables", "-D"}, r.Args()...))
 }
 
