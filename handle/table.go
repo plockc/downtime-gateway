@@ -20,7 +20,7 @@ func NewTable(ids ...string) (iptables.Table, error) {
 
 var Tables = Resources{
 	Name: "IP Table",
-	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
+	Factory: func(ids ...string) (resource.Resource, error) {
 		table, err := NewTable(ids...)
 		if err != nil {
 			return nil, err

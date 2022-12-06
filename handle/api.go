@@ -50,7 +50,7 @@ func (api Api) ServeHTTP(w http.ResponseWriter, req *http.Request) {
 	// increment by two as relationship require path with id of parent + relationship name
 	for i := 0; i <= len(parts); i += 2 {
 		// factories just gathers the the number of IDs it needs to construct
-		res, err := handler.Factory(nil, ids...)
+		res, err := handler.Factory(ids...)
 		if err != nil {
 			errorResponse(w, req.URL.Path, http.StatusMethodNotAllowed, err)
 			return

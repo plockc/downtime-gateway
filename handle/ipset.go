@@ -21,7 +21,7 @@ func NewIPSet(ids ...string) (iptables.IPSet, error) {
 
 var IPSets = Resources{
 	Name: "IP Set",
-	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
+	Factory: func(ids ...string) (resource.Resource, error) {
 		ipSet, err := NewIPSet(ids...)
 		if err != nil {
 			return nil, err
@@ -36,7 +36,7 @@ var IPSets = Resources{
 
 var IPSetMembers = Resources{
 	Name: "IP Set Member",
-	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
+	Factory: func(ids ...string) (resource.Resource, error) {
 		ipSet, err := NewIPSet(ids...)
 		if err != nil {
 			return nil, err

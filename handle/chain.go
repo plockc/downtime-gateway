@@ -20,7 +20,7 @@ func NewChain(ids ...string) (iptables.Chain, error) {
 
 var Chains = Resources{
 	Name: "IPTable Chain",
-	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
+	Factory: func(ids ...string) (resource.Resource, error) {
 		chain, err := NewChain(ids...)
 		if err != nil {
 			return nil, err

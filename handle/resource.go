@@ -16,7 +16,7 @@ const (
 type Resources struct {
 	Name string
 	// the factory will need to parse the ID from a string for URL handling
-	Factory       func(body []byte, ids ...string) (resource.Resource, error)
+	Factory       func(ids ...string) (resource.Resource, error)
 	Relationships map[string]Resources
 	Allowed       []Allowed
 }

@@ -8,7 +8,7 @@ import (
 
 var Versions = Resources{
 	Name: "Version",
-	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
+	Factory: func(ids ...string) (resource.Resource, error) {
 		switch len(ids) {
 		case 0:
 			return Version{}, nil

@@ -6,7 +6,7 @@ import (
 
 var Namespaces = Resources{
 	Name: "Network Namespace",
-	Factory: func(bodyIgnored []byte, ids ...string) (resource.Resource, error) {
+	Factory: func(ids ...string) (resource.Resource, error) {
 		switch len(ids) {
 		case 0, 1:
 			return resource.NewNS("").NSResource(), nil

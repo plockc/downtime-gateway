@@ -9,7 +9,7 @@ import (
 
 var Rules = Resources{
 	Name: "IPTables Rules",
-	Factory: func(body []byte, ids ...string) (resource.Resource, error) {
+	Factory: func(ids ...string) (resource.Resource, error) {
 		chain, err := NewChain(ids...)
 		if err != nil {
 			return nil, err
