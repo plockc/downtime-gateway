@@ -1,8 +1,6 @@
 package handle
 
-import (
-	"github.com/plockc/gateway/resource"
-)
+import "github.com/plockc/gateway/resource"
 
 type Allowed int
 
@@ -13,10 +11,13 @@ const (
 	UPSERT_ALLOWED
 )
 
+type Factory func(string) (resource.Resource, error)
+type ChainedFactory func() (ChainedFactory, Factory)
+
 type Resources struct {
-	Name string
+	Label string
 	// the factory will need to parse the ID from a string for URL handling
-	Factory       func(ids ...string) (resource.Resource, error)
+	ChainedFactory
 	Relationships map[string]Resources
 	Allowed       []Allowed
 }

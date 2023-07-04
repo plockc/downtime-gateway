@@ -7,26 +7,27 @@ import (
 	"github.com/plockc/gateway/resource"
 )
 
-var Rules = Resources{
-	Name: "IPTables Rules",
-	Factory: func(ids ...string) (resource.Resource, error) {
-		chain, err := NewChain(ids...)
-		if err != nil {
-			return nil, err
-		}
-		// prior ids are version, namespace, table, chain
-		switch len(ids) {
-		case 4:
-			return iptables.NewRule(chain).RuleResource(), nil
-		default:
-			rule := iptables.NewRule(chain)
-			id, err := strconv.ParseUint(ids[4], 16, 32)
-			if err != nil {
-				return iptables.Rule{}.RuleResource(), err
+func RuleChainedFactory(rule *iptables.Rule) ChainedFactory {
+	return func() (ChainedFactory, Factory) {
+		factory := func(ruleId string) (resource.Resource, error) {
+			if ruleId != "" {
+				id, err := strconv.ParseUint(ruleId, 16, 32)
+				if err != nil {
+					return iptables.Rule{}.RuleResource(), err
+				}
+				rule.Id = uint32(id)
 			}
-			rule.Id = uint32(id)
 			return rule.RuleResource(), nil
 		}
+		return ChainChainedFactory(&rule.Chain), factory
+	}
+}
+
+var Rules = Resources{
+	Label: "IPTables Rules",
+	ChainedFactory: func() (ChainedFactory, Factory) {
+		rule := iptables.Rule{}
+		return RuleChainedFactory(&rule)()
 	},
 	Allowed: []Allowed{LIST_ALLOWED, UPSERT_ALLOWED, GET_ALLOWED, DELETE_ALLOWED},
 }
